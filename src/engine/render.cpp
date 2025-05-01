@@ -20,6 +20,11 @@ struct Material {
     SDL_GPUShader* shader{};
 };
 
+enum MeshType {
+    Static,
+    Skinned,
+};
+
 struct Mesh {
     struct Primitive {
         std::vector<Vertex> vertices{};
@@ -32,6 +37,8 @@ struct Mesh {
 
         Material material{};
     };
+
+    MeshType type{};
 
     AABB aabb{};
     std::vector<Primitive> primitives{};
@@ -96,8 +103,6 @@ struct Model {
     Skeleton skeleton{};
     std::unordered_map<std::string, Animation> animations{};
     std::string path{};
-
-
 };
 
 SDL_GPUTexture* load_texture(void* data, std::size_t size) {
@@ -374,6 +379,16 @@ Model load_gltf(const std::string& path) {
     for (auto& mesh : model.meshes) {
         model.aabb.min = vec_min(model.aabb.min, mesh.aabb.min);
         model.aabb.max = vec_max(model.aabb.max, mesh.aabb.max);
+    }
+
+    MeshType mesh_type = model.skeleton.joints.empty() ? MeshType::Static : MeshType::Skinned;
+
+    for (auto& mesh : model.meshes) {
+        mesh.type = mesh_type;
+
+        for (auto& primitive : mesh.primitives) {
+            primitive.material.shader = mesh_type == MeshType::Static ? nullptr : nullptr;
+        }
     }
 
     return model;

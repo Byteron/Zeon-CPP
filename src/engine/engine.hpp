@@ -2,5 +2,3 @@
 #include "math.cpp"
 #include "render.cpp"
 #include "entity.cpp"
-#include "storage.cpp"
-#include "world.cpp"
