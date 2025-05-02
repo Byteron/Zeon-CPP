@@ -7,8 +7,15 @@
 #define CGLTF_IMPLEMENTATION
 #include <cgltf.h>
 
-#include "core/core.hpp"
-#include "engine/engine.hpp"
+#include "core/math.cpp"
+#include "core/string.cpp"
+#include "core/array.cpp"
+#include "core/span.cpp"
+
+#include "engine/filesystem.cpp"
+#include "engine/entity.cpp"
+#include "engine/render.cpp"
+
 
 struct Player {
     int number{};
