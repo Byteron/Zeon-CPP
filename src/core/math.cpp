@@ -52,7 +52,7 @@ Vec3 vec_min(Vec3 a, Vec3 b) {
     Vec3 vec;
     vec.x = MIN(a.x, b.x);
     vec.y = MIN(a.y, b.y);
-    vec.z = MIN(a.x, b.z);
+    vec.z = MIN(a.z, b.z);
     return vec;
 }
 
@@ -60,6 +60,6 @@ Vec3 vec_max(Vec3 a, Vec3 b) {
     Vec3 vec;
     vec.x = MAX(a.x, b.x);
     vec.y = MAX(a.y, b.y);
-    vec.z = MAX(a.x, b.z);
+    vec.z = MAX(a.z, b.z);
     return vec;
 }
