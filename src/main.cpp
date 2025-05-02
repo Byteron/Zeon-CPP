@@ -6,15 +6,8 @@
 #define CGLTF_IMPLEMENTATION
 #include <cgltf.h>
 
-#include "core/defines.h"
-#include "core/math.h"
-#include "core/string.h"
-#include "core/array.h"
-#include "core/span.h"
-
-#include "engine/filesystem.h"
-#include "engine/entity.h"
-#include "engine/render.h"
+#include "core/core.h"
+#include "engine/engine.h"
 
 struct Player {
     int number{};

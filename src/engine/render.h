@@ -183,7 +183,7 @@ Mesh process_mesh(string path, const cgltf_mesh* raw_mesh, cgltf_node* node) {
             primitive.material.alpha_mode = raw_material->alpha_mode;
 
             if (raw_material->has_pbr_metallic_roughness) {
-                primitive.material.albedo = make_vec4(raw_material->pbr_metallic_roughness.base_color_factor);
+                primitive.material.albedo = to_vec4(raw_material->pbr_metallic_roughness.base_color_factor);
 
                 if (raw_material->pbr_metallic_roughness.base_color_texture.texture) {
                     if (auto diffuse_tex_uri = raw_material->pbr_metallic_roughness.base_color_texture.texture->image->uri) {
@@ -191,7 +191,7 @@ Mesh process_mesh(string path, const cgltf_mesh* raw_mesh, cgltf_node* node) {
                         primitive.material.diffuse_texture = load_texture(diffuse_tex_path);
                     } else {
                         auto buffer_view = raw_material->pbr_metallic_roughness.base_color_texture.texture->image->buffer_view;
-                        auto diffuse_tex_data = static_cast<u8*>(buffer_view->buffer->data) + buffer_view->offset;
+                        auto diffuse_tex_data = static_cast<byte*>(buffer_view->buffer->data) + buffer_view->offset;
                         auto diffuse_tex_size = buffer_view->buffer->size;
                         primitive.material.diffuse_texture = load_texture(diffuse_tex_data, diffuse_tex_size);
                     }
@@ -209,12 +209,12 @@ Mesh process_mesh(string path, const cgltf_mesh* raw_mesh, cgltf_node* node) {
         auto& primitive = mesh.primitives[i];
         for (int j = 0; j < primitive.vertices.count; ++j) {
             auto& vertex = primitive.vertices[j];
-            primitive.aabb.min = vec_min(primitive.aabb.min, vertex.position);
-            primitive.aabb.max = vec_max(primitive.aabb.max, vertex.position);
+            primitive.aabb.min = min(primitive.aabb.min, vertex.position);
+            primitive.aabb.max = max(primitive.aabb.max, vertex.position);
         }
 
-        mesh.aabb.min = vec_min(mesh.aabb.min, primitive.aabb.min);
-        mesh.aabb.max = vec_max(mesh.aabb.max, primitive.aabb.max);
+        mesh.aabb.min = min(mesh.aabb.min, primitive.aabb.min);
+        mesh.aabb.max = max(mesh.aabb.max, primitive.aabb.max);
     }
 
     return mesh;
@@ -344,13 +344,13 @@ Array<Animation> process_animations(const cgltf_data* data, Skeleton& skeleton) 
         for (int j = 0; j < animation.joint_animations.count; ++j) {
             auto& joint_animation = animation.joint_animations[j];
             for (int k = 0; k < joint_animation.positions.count; ++k) {
-                animation.duration = MAX(animation.duration, joint_animation.positions[k].timestamp);
+                animation.duration = max(animation.duration, joint_animation.positions[k].timestamp);
             }
             for (int k = 0; k < joint_animation.rotations.count; ++k) {
-                animation.duration = MAX(animation.duration, joint_animation.rotations[k].timestamp);
+                animation.duration = max(animation.duration, joint_animation.rotations[k].timestamp);
             }
             for (int k = 0; k < joint_animation.scales.count; ++k) {
-                animation.duration = MAX(animation.duration, joint_animation.scales[k].timestamp);
+                animation.duration = max(animation.duration, joint_animation.scales[k].timestamp);
             }
         }
     }
@@ -385,8 +385,8 @@ Model load_gltf(const char* path) {
 
     for (int i = 0; i < model.meshes.count; ++i) {
         auto& mesh = model.meshes[i];
-        model.aabb.min = vec_min(model.aabb.min, mesh.aabb.min);
-        model.aabb.max = vec_max(model.aabb.max, mesh.aabb.max);
+        model.aabb.min = min(model.aabb.min, mesh.aabb.min);
+        model.aabb.max = max(model.aabb.max, mesh.aabb.max);
     }
 
     MeshType mesh_type = is_empty(model.skeleton.joints) ? MeshType::Static : MeshType::Skinned;

@@ -1,6 +1,3 @@
-#define MIN(a, b) ((a) > (b) ? (b) : (a))
-#define MAX(a, b) ((a) < (b) ? (b) : (a))
-
 struct Vec3 {
     float x, y, z;
 
@@ -42,24 +39,32 @@ struct AABB {
     Vec3 max{};
 };
 
-Vec4 make_vec4(float floats[4]) {
+Vec4 to_vec4(float floats[4]) {
     Vec4 vec;
     memcpy(&vec, &floats[0], sizeof(float) * 4);
     return vec;
 }
 
-Vec3 vec_min(Vec3 a, Vec3 b) {
+float min(float a, float b) {
+    return a < b ? a : b;
+}
+
+float max(float a, float b) {
+    return a > b ? a : b;
+}
+
+Vec3 min(Vec3 a, Vec3 b) {
     Vec3 vec;
-    vec.x = MIN(a.x, b.x);
-    vec.y = MIN(a.y, b.y);
-    vec.z = MIN(a.z, b.z);
+    vec.x = min(a.x, b.x);
+    vec.y = min(a.y, b.y);
+    vec.z = min(a.z, b.z);
     return vec;
 }
 
-Vec3 vec_max(Vec3 a, Vec3 b) {
+Vec3 max(Vec3 a, Vec3 b) {
     Vec3 vec;
-    vec.x = MAX(a.x, b.x);
-    vec.y = MAX(a.y, b.y);
-    vec.z = MAX(a.z, b.z);
+    vec.x = max(a.x, b.x);
+    vec.y = max(a.y, b.y);
+    vec.z = max(a.z, b.z);
     return vec;
 }

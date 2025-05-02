@@ -17,7 +17,7 @@ struct Storage {
     int id{};
     size_t count{};
     Array<Entity> entities{};
-    Array<u8> data{};
+    Array<byte> data{};
 
     size_t component_byte_size{};
 };
@@ -32,12 +32,12 @@ void reserve(Storage& storage, size_t desired_items) {
     resize(storage.data, desired_items * storage.component_byte_size);
 }
 
-void set(Storage& storage, const int index, const u8* value) {
+void set(Storage& storage, const int index, const byte* value) {
     const size_t i = storage.component_byte_size * index;
     memcpy(storage.data.data + i, value, storage.component_byte_size);
 }
 
-u8* get(Storage& storage, const int index) {
+byte* get(Storage& storage, const int index) {
     const size_t i = storage.component_byte_size * index;
     return storage.data.data + i;
 }
@@ -52,7 +52,7 @@ Entity remove(Storage& storage, const int index) {
 
     const Entity last_entity = storage.entities[last_index];
 
-    const u8* value = get(storage, last_entity.id);
+    const byte* value = get(storage, last_entity.id);
     set(storage, index, value);
 
     storage.entities[index] = last_entity;
@@ -62,7 +62,7 @@ Entity remove(Storage& storage, const int index) {
     return last_entity;
 }
 
-void add(Storage& storage, const Entity entity, const u8* value) {
+void add(Storage& storage, const Entity entity, const byte* value) {
     const size_t index = storage.count;
     storage.count++;
     reserve(storage, storage.count);
@@ -224,7 +224,7 @@ Entity spawn(World& world, T value) {
 
     Entity entity = Entity{ .id = id, .gen = meta.gen };
 
-    add(storage, entity, reinterpret_cast<u8*>(&value));
+    add(storage, entity, reinterpret_cast<byte*>(&value));
 
     return entity;
 }
