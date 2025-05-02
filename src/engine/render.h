@@ -191,7 +191,7 @@ Mesh process_mesh(string path, const cgltf_mesh* raw_mesh, cgltf_node* node) {
                         primitive.material.diffuse_texture = load_texture(diffuse_tex_path);
                     } else {
                         auto buffer_view = raw_material->pbr_metallic_roughness.base_color_texture.texture->image->buffer_view;
-                        auto diffuse_tex_data = static_cast<uint8_t*>(buffer_view->buffer->data) + buffer_view->offset;
+                        auto diffuse_tex_data = static_cast<u8*>(buffer_view->buffer->data) + buffer_view->offset;
                         auto diffuse_tex_size = buffer_view->buffer->size;
                         primitive.material.diffuse_texture = load_texture(diffuse_tex_data, diffuse_tex_size);
                     }
@@ -205,8 +205,10 @@ Mesh process_mesh(string path, const cgltf_mesh* raw_mesh, cgltf_node* node) {
 
     setup_mesh(&mesh);
 
-    for (auto& primitive : mesh.primitives) {
-        for (auto& vertex : primitive.vertices) {
+    for (int i = 0; i < mesh.primitives.count; ++i) {
+        auto& primitive = mesh.primitives[i];
+        for (int j = 0; j < primitive.vertices.count; ++j) {
+            auto& vertex = primitive.vertices[j];
             primitive.aabb.min = vec_min(primitive.aabb.min, vertex.position);
             primitive.aabb.max = vec_max(primitive.aabb.max, vertex.position);
         }
@@ -339,15 +341,16 @@ Array<Animation> process_animations(const cgltf_data* data, Skeleton& skeleton) 
             }
         }
 
-        for (auto& joint_animation : animation.joint_animations) {
-            for (auto& position : joint_animation.positions) {
-                animation.duration = MAX(animation.duration, position.timestamp);
+        for (int j = 0; j < animation.joint_animations.count; ++j) {
+            auto& joint_animation = animation.joint_animations[j];
+            for (int k = 0; k < joint_animation.positions.count; ++k) {
+                animation.duration = MAX(animation.duration, joint_animation.positions[k].timestamp);
             }
-            for (auto& rotation : joint_animation.rotations) {
-                animation.duration = MAX(animation.duration, rotation.timestamp);
+            for (int k = 0; k < joint_animation.rotations.count; ++k) {
+                animation.duration = MAX(animation.duration, joint_animation.rotations[k].timestamp);
             }
-            for (auto& scale : joint_animation.scales) {
-                animation.duration = MAX(animation.duration, scale.timestamp);
+            for (int k = 0; k < joint_animation.scales.count; ++k) {
+                animation.duration = MAX(animation.duration, joint_animation.scales[k].timestamp);
             }
         }
     }
@@ -380,17 +383,21 @@ Model load_gltf(const char* path) {
     model.animations = animations;
     model.path = full_path;
 
-    for (auto& mesh : model.meshes) {
+    for (int i = 0; i < model.meshes.count; ++i) {
+        auto& mesh = model.meshes[i];
         model.aabb.min = vec_min(model.aabb.min, mesh.aabb.min);
         model.aabb.max = vec_max(model.aabb.max, mesh.aabb.max);
     }
 
     MeshType mesh_type = is_empty(model.skeleton.joints) ? MeshType::Static : MeshType::Skinned;
 
-    for (auto& mesh : model.meshes) {
+    for (int i = 0; i < model.meshes.count; ++i) {
+        auto& mesh = model.meshes[i];
+
         mesh.type = mesh_type;
 
-        for (auto& primitive : mesh.primitives) {
+        for (int j = 0; j < mesh.primitives.count; ++j) {
+            auto& primitive = mesh.primitives[j];
             primitive.material.shader = mesh_type == MeshType::Static ? nullptr : nullptr;
         }
     }

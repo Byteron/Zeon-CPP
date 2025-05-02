@@ -1,19 +1,8 @@
 template <typename T>
 struct Array {
-    struct Iterator {
-        T* ptr{};
-
-        T& operator*() { return *ptr; }
-        Iterator& operator++() { ++ptr; return *this; }
-        bool operator!=(const Iterator& other) { return ptr != other.ptr; }
-    };
-
     T* data;
     size_t count;
     size_t capacity;
-
-    Iterator begin() { return Iterator(data); }
-    Iterator end() { return Iterator(data + count); }
 
     T& operator[](size_t index) {
         assert(index >= 0 && index < count);

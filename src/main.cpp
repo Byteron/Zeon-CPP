@@ -1,5 +1,4 @@
-﻿#include <cstdio>
-#include <SDL3/SDL.h>
+﻿#include <SDL3/SDL.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
@@ -7,15 +6,15 @@
 #define CGLTF_IMPLEMENTATION
 #include <cgltf.h>
 
-#include "core/math.cpp"
-#include "core/string.cpp"
-#include "core/array.cpp"
-#include "core/span.cpp"
+#include "core/defines.h"
+#include "core/math.h"
+#include "core/string.h"
+#include "core/array.h"
+#include "core/span.h"
 
-#include "engine/filesystem.cpp"
-#include "engine/entity.cpp"
-#include "engine/render.cpp"
-
+#include "engine/filesystem.h"
+#include "engine/entity.h"
+#include "engine/render.h"
 
 struct Player {
     int number{};

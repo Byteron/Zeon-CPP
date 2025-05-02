@@ -1,18 +1,14 @@
 # Variables
 cxx = cl
 cxxflags = /std:c++20 /EHsc /Zi /nologo /showIncludes
-include_flags = /Ivendor\cgltf /Ivendor\stb /Ivendor\SDL3\include /Ivendor\handmade_math
-pch_flags = /Yupch.h /Fpbin\pch.pch
+include_flags = /Ivendor\cgltf /Ivendor\stb /Ivendor\SDL3\include
 link_flags = /link /nologo
 deps = msvc
 
 # Rules
-rule pch
-  command = $cxx $cxxflags /Ivendor\SDL3\include /Ivendor\handmade_math /Ycpch.h /Fpbin\pch.pch /c $in /Fobin\ /Fdbin\
-  description = PCH $out
 
 rule cxx
-  command = $cxx $cxxflags $include_flags $pch_flags $in vendor\SDL3\lib\x64\SDL3.lib bin\pch.obj /Fobin\ /Febin\main.exe /Fdbin\ $link_flags
+  command = $cxx $cxxflags $include_flags $in vendor\SDL3\lib\x64\SDL3.lib /Fobin\ /Febin\main.exe /Fdbin\ $link_flags
   description = CXX $out
 
 rule copy
@@ -20,9 +16,7 @@ rule copy
   description = COPY $out
 
 # Build statements
-build bin\pch.obj: pch src\pch.cpp
-
-build bin\main.exe: cxx src\main.cpp | bin\pch.obj
+build bin\main.exe: cxx src\main.cpp
 
 build bin\SDL3.dll: copy vendor\SDL3\lib\x64\SDL3.dll
 
