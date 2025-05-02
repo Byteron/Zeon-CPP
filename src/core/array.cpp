@@ -1,4 +1,3 @@
-#include <typeinfo>
 template <typename T>
 struct Array {
     struct Iterator {
@@ -116,10 +115,3 @@ template <typename T>
 void free(Array<T>& array) {
     free(array.data);
 }
-
-
-
-
-
-
-

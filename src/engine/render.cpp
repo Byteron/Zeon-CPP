@@ -46,7 +46,7 @@ struct Mesh {
 
 struct Skeleton {
     struct Joint {
-        std::string name{};
+        string name{};
         Transform transform{};
         Mat4 inverse_bind_matrix{};
         Array<size_t> children{};
@@ -91,7 +91,7 @@ struct JointAnimation {
 };
 
 struct Animation {
-    std::string name{};
+    string name{};
     float duration{};
     Array<JointAnimation> joint_animations{};
 };
@@ -101,7 +101,7 @@ struct Model {
     Array<Mesh> meshes{};
     AABB aabb{};
     Skeleton skeleton{};
-    std::unordered_map<std::string, Animation> animations{};
+    Array<Animation> animations{};
     string path{};
 };
 
@@ -109,7 +109,7 @@ SDL_GPUTexture* load_texture(void* data, size_t size) {
     return nullptr;
 }
 
-SDL_GPUTexture* load_texture(const std::string& path) {
+SDL_GPUTexture* load_texture(const string& path) {
     return nullptr;
 }
 
@@ -117,7 +117,7 @@ void setup_mesh(Mesh* mesh) {
     // TODO: initialize mesh SDL GPU Style. If possible. We will see.
 }
 
-Mesh process_mesh(std::string path, const cgltf_mesh* raw_mesh, cgltf_node* node) {
+Mesh process_mesh(string path, const cgltf_mesh* raw_mesh, cgltf_node* node) {
     Mesh mesh{};
 
     if (raw_mesh->primitives_count == 1) {
@@ -187,7 +187,7 @@ Mesh process_mesh(std::string path, const cgltf_mesh* raw_mesh, cgltf_node* node
 
                 if (raw_material->pbr_metallic_roughness.base_color_texture.texture) {
                     if (auto diffuse_tex_uri = raw_material->pbr_metallic_roughness.base_color_texture.texture->image->uri) {
-                        std::string diffuse_tex_path = path + diffuse_tex_uri;
+                        string diffuse_tex_path = path + diffuse_tex_uri;
                         primitive.material.diffuse_texture = load_texture(diffuse_tex_path);
                     } else {
                         auto buffer_view = raw_material->pbr_metallic_roughness.base_color_texture.texture->image->buffer_view;
@@ -218,7 +218,7 @@ Mesh process_mesh(std::string path, const cgltf_mesh* raw_mesh, cgltf_node* node
     return mesh;
 }
 
-void process_node(std::string path, cgltf_node* node, Array<Mesh>& meshes) {
+void process_node(string path, cgltf_node* node, Array<Mesh>& meshes) {
     if (node->mesh) {
         add(meshes, process_mesh(path, node->mesh, node));
     }
@@ -230,7 +230,7 @@ void process_node(std::string path, cgltf_node* node, Array<Mesh>& meshes) {
     }
 }
 
-Array<Mesh> process_meshes(std::string path, cgltf_data* data) {
+Array<Mesh> process_meshes(string path, cgltf_data* data) {
     Array<Mesh> meshes{};
 
     for (int i = 0; i < data->scenes_count; ++i) {
@@ -270,30 +270,30 @@ Skeleton process_skeleton(const cgltf_data* data) {
         }
 
         cgltf_accessor_read_float(skin.inverse_bind_matrices, i, &inverse_bind_matrix[0][0], 16);
-        name = node->name;
+        name = to_string(node->name);
     }
 
     return skeleton;
 }
 
-std::unordered_map<std::string, Animation> process_animations(const cgltf_data* data, Skeleton& skeleton) {
+Array<Animation> process_animations(const cgltf_data* data, Skeleton& skeleton) {
     if (data->skins_count == 0 || data->animations_count == 0)
         return {};
 
     const cgltf_skin skin = data->skins[0];
 
-    std::unordered_map<std::string, Animation> animations{};
+    Array<Animation> animations{};
 
-    animations.reserve(data->animations_count);
+    resize(animations, data->animations_count);
 
     Span all_joints = { skin.joints, skin.joints_count };
 
     for (int i = 0; i < data->animations_count; ++i) {
         cgltf_animation animation_data = data->animations[i];
-        std::string name = animation_data.name;
-        std::cout << "name: " << name << std::endl;
+        string name = to_string(animation_data.name);
+        fprintf(stderr,"name: %s\n", name.data);
 
-        Animation& animation = animations[name];
+        Animation& animation = animations[i];
         animation.name = name;
 
         resize(animation.joint_animations, skeleton.joints.count);
@@ -364,15 +364,15 @@ Model load_gltf(const char* path) {
     cgltf_options options = {};
     cgltf_data* data = {};
     if (cgltf_result parse_result = cgltf_parse(&options, file_contents.data, file_contents.length, &data)) {
-        std::cout << "Failed to parse gltf file: " << parse_result << std::endl;
+        fprintf(stderr, "Failed to parse gltf file: %d\n", parse_result);
     }
     if (cgltf_result load_buffers_result = cgltf_load_buffers(&options, data, full_path.data)) {
-        std::cout << "Failed to load buffers: " << load_buffers_result << std::endl;
+        fprintf(stderr, "Failed to load gltf buffers: %d\n", load_buffers_result);
     }
 
-    Array<Mesh> meshes = process_meshes(path, data);
+    Array<Mesh> meshes = process_meshes(to_string(path), data);
     Skeleton skeleton = process_skeleton(data);
-    std::unordered_map<std::string, Animation> animations = process_animations(data, skeleton);
+    Array<Animation> animations = process_animations(data, skeleton);
 
     Model model{};
     model.meshes = meshes;

@@ -1,4 +1,5 @@
-﻿#include "pch.h"
+﻿#include <cstdio>
+#include <SDL3/SDL.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
@@ -23,18 +24,18 @@ struct MeshComponent {
 
 int main() {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
-        std::cout << "SDL_Init Error: " << SDL_GetError() << std::endl;
+        fprintf(stderr, "SDL_Init Error: %s\n", SDL_GetError());
         return 1;
     }
 
     SDL_Window *window = SDL_CreateWindow("Test", 800, 600, SDL_WINDOW_OPENGL);
     if (!window) {
-        std::cout << "SDL_CreateWindow Error: " << SDL_GetError() << std::endl;
+        fprintf(stderr, "SDL_CreateWindow Error: %s\n", SDL_GetError());
         SDL_Quit();
         return 1;
     }
 
-    std::cout << SDL_GetBasePath() << std::endl;
+    fprintf(stderr, "SDL_GetBasePath: %s\n", SDL_GetBasePath());
 
     Model model = load_gltf("/../assets/models/Barbarian.glb");
 

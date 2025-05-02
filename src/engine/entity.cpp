@@ -34,7 +34,7 @@ void reserve(Storage& storage, size_t desired_items) {
 
 void set(Storage& storage, const int index, const uint8_t* value) {
     const size_t i = storage.component_byte_size * index;
-    std::memcpy(storage.data.data + i, value, storage.component_byte_size);
+    memcpy(storage.data.data + i, value, storage.component_byte_size);
 }
 
 uint8_t* get(Storage& storage, const int index) {
@@ -88,7 +88,7 @@ struct Operation {
     Entity entity;
 };
 
-inline std::atomic<size_t> component_id_counter{0};
+inline size_t component_id_counter{0};
 
 template <typename T>
 size_t get_type_id() noexcept {
@@ -177,12 +177,17 @@ Span<Entity> get_entities(World& world) {
 }
 
 template <typename T>
+struct EntityPair {
+    Entity entity;
+    T& component;
+};
+template <typename T>
 struct EntityComponentSpans {
     Span<T> components{};
     Span<Entity> entities{};
     size_t count{};
 
-    std::tuple<Entity, T&> operator[](size_t i) noexcept {
+    EntityPair<T> operator[](size_t i) noexcept {
         return { entities[i], components[i] };
     }
 };
@@ -313,15 +318,12 @@ void despawn(World& world, const Entity entity) {
     EntityMeta& meta = world.entities[entity.id];
 
     Entity child = meta.first_child;
-    // ReSharper disable once CppDFAEndlessLoop
     while (is_alive(world, child)) {
-        // ReSharper disable once CppDFAUnreachableCode
         const Entity next = world.entities[child.id].next_sibling;
         despawn(world, child);
         child = next;
     }
 
-    // ReSharper disable once CppDFAUnreachableCode
     meta.parent = {};
     delete_entity(world, entity);
 }
