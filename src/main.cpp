@@ -6,6 +6,7 @@
 #define CGLTF_IMPLEMENTATION
 #include <cgltf.h>
 
+#include "core/core.hpp"
 #include "engine/engine.hpp"
 
 struct Player {
@@ -32,6 +33,8 @@ int main() {
         SDL_Quit();
         return 1;
     }
+
+    std::cout << SDL_GetBasePath() << std::endl;
 
     Model model = load_gltf("/../assets/models/Barbarian.glb");
 

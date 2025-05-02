@@ -15,35 +15,35 @@ constexpr Entity ENTITY_NONE{};
 
 struct Storage {
     int id{};
-    std::size_t count{};
-    std::vector<Entity> entities{};
-    std::vector<uint8_t> data{};
+    size_t count{};
+    Array<Entity> entities{};
+    Array<uint8_t> data{};
 
-    std::size_t component_byte_size{};
+    size_t component_byte_size{};
 };
 
-void reserve(Storage& storage, std::size_t desired_items) {
-    if (storage.entities.size() >= desired_items) return;
+void reserve(Storage& storage, size_t desired_items) {
+    if (storage.entities.count >= desired_items) return;
 
     desired_items *= 2;
     if (desired_items < 8) desired_items = 8;
 
-    storage.entities.resize(desired_items);
-    storage.data.resize(desired_items * storage.component_byte_size);
+    resize(storage.entities, desired_items);
+    resize(storage.data, desired_items * storage.component_byte_size);
 }
 
 void set(Storage& storage, const int index, const uint8_t* value) {
-    const std::size_t i = storage.component_byte_size * index;
-    std::memcpy(storage.data.data() + i, value, storage.component_byte_size);
+    const size_t i = storage.component_byte_size * index;
+    std::memcpy(storage.data.data + i, value, storage.component_byte_size);
 }
 
 uint8_t* get(Storage& storage, const int index) {
-    const std::size_t i = storage.component_byte_size * index;
-    return storage.data.data() + i;
+    const size_t i = storage.component_byte_size * index;
+    return storage.data.data + i;
 }
 
 Entity remove(Storage& storage, const int index) {
-    const std::size_t last_index = storage.count - 1;
+    const size_t last_index = storage.count - 1;
 
     if (index == last_index) {
         storage.count -= 1;
@@ -63,7 +63,7 @@ Entity remove(Storage& storage, const int index) {
 }
 
 void add(Storage& storage, const Entity entity, const uint8_t* value) {
-    const std::size_t index = storage.count;
+    const size_t index = storage.count;
     storage.count++;
     reserve(storage, storage.count);
     set(storage, index, value);
@@ -88,28 +88,28 @@ struct Operation {
     Entity entity;
 };
 
-inline std::atomic<std::size_t> component_id_counter{0};
+inline std::atomic<size_t> component_id_counter{0};
 
 template <typename T>
-std::size_t get_type_id() noexcept {
-    static const std::size_t id = component_id_counter++;
+size_t get_type_id() noexcept {
+    static const size_t id = component_id_counter++;
     return id;
 }
 
 struct World {
-    std::vector<EntityMeta> entities{};
+    Array<EntityMeta> entities{};
 
-    std::vector<Storage> storages{};
+    Array<Storage> storages{};
 
-    std::vector<int> unused_ids{};
+    Array<int> unused_ids{};
 
-    std::vector<Operation> ops{};
+    Array<Operation> ops{};
     int lock_count{};
     bool is_locked{};
 };
 
 bool is_alive(const World& world, const Entity entity) {
-    return entity.id < world.entities.size() && entity.gen == world.entities[entity.id].gen;
+    return entity.id < world.entities.count && entity.gen == world.entities[entity.id].gen;
 }
 
 int index_of(const World& world, const Entity entity) {
@@ -122,10 +122,10 @@ int type_id_of(const World& world, const Entity entity) {
 
 template <typename T>
 Storage& get_storage(World& world) {
-    const std::size_t type_id = get_type_id<T>();
+    const size_t type_id = get_type_id<T>();
 
-    if (type_id >= world.storages.size()) {
-        world.storages.resize(type_id + 1);
+    if (type_id >= world.storages.count) {
+        resize(world.storages, type_id + 1);
     }
 
     if (world.storages[type_id].component_byte_size == 0) {
@@ -136,15 +136,15 @@ Storage& get_storage(World& world) {
     return world.storages[type_id];
 }
 
-Storage& get_storage(World& world, const std::size_t type_id) {
-    assert(world.storages.size() > type_id);
+Storage& get_storage(World& world, const size_t type_id) {
+    assert(world.storages.count > type_id);
     return world.storages[type_id];
 }
 
 template <typename T>
-std::span<T> get_span(World& world) {
+Span<T> get_span(World& world) {
     Storage& storage = get_storage<T>(world);
-    std::span<T> span = { reinterpret_cast<T*>(storage.data.data()), storage.count };
+    Span<T> span = { reinterpret_cast<T*>(storage.data.data()), storage.count };
     return span;
 }
 
@@ -156,12 +156,12 @@ Entity get_parent(World& world, const Entity entity) {
 
 template <typename T>
 bool is_a(World& world, const Entity entity) {
-    std::size_t type_id = get_type_id<T>();
+    size_t type_id = get_type_id<T>();
     EntityMeta& meta = world.entities[entity.id];
     return meta.type_id == type_id;
 }
 
-HMM_Vec3& get_position(World& world, const Entity entity) {
+Vec3& get_position(World& world, const Entity entity) {
     EntityMeta& meta = world.entities[entity.id];
     return meta.local_transform.position;
 }
@@ -171,18 +171,18 @@ Entity get_entity(World& world, const int entity_id) {
     return Entity{ .id = entity_id, .gen = meta.gen };
 }
 template <typename T>
-std::span<Entity> get_entities(World& world) {
+Span<Entity> get_entities(World& world) {
     Storage& storage = get_storage<T>(world);
     return storage.entities;
 }
 
 template <typename T>
 struct EntityComponentSpans {
-    std::span<T> components{};
-    std::span<Entity> entities{};
+    Span<T> components{};
+    Span<Entity> entities{};
     size_t count{};
 
-    std::tuple<Entity, T&> operator[](std::size_t i) noexcept {
+    std::tuple<Entity, T&> operator[](size_t i) noexcept {
         return { entities[i], components[i] };
     }
 };
@@ -190,7 +190,7 @@ struct EntityComponentSpans {
 template <typename T>
 EntityComponentSpans<T> get(World& world) {
     Storage& storage = get_storage<T>(world);
-    std::span<T> span = { reinterpret_cast<T*>(storage.data.data()), storage.count };
+    Span<T> span = { reinterpret_cast<T*>(storage.data.data()), storage.count };
     return EntityComponentSpans { .components = span, .entities = storage.entities, .count = storage.count };
 }
 
@@ -198,12 +198,11 @@ template <typename T>
 Entity spawn(World& world, T value) {
     int id;
 
-    if (world.unused_ids.empty()) {
-        id = world.entities.size();
-        world.entities.emplace_back(EntityMeta{});
+    if (is_empty(world.unused_ids)) {
+        id = world.entities.count;
+        add(world.entities, {});
     } else {
-        id = world.unused_ids.back();
-        world.unused_ids.pop_back();
+        id = pop_back(world.unused_ids);
     }
 
     Storage& storage = get_storage<T>(world);
@@ -298,7 +297,7 @@ void delete_entity(World& world, const Entity entity) {
         remove_child(world, meta.parent, entity);
     }
 
-    world.unused_ids.push_back(entity.id);
+    add(world.unused_ids, entity.id);
 }
 
 void despawn(World& world, const Entity entity) {
@@ -307,7 +306,7 @@ void despawn(World& world, const Entity entity) {
     }
 
     if (world.is_locked) {
-        world.ops.emplace_back(Operation{ .entity = entity });
+        add(world.ops, Operation{ .entity = entity });
         return;
     }
 
@@ -330,7 +329,7 @@ void despawn(World& world, const Entity entity) {
 template<typename T>
 T& get(World& world, const Entity entity) {
     EntityMeta& meta = world.entities[entity.id];
-    std::span<T> span = get_span<T>(world);
+    Span<T> span = get_span<T>(world);
     return span[meta.index];
 }
 
@@ -341,13 +340,13 @@ void add_component(World&world, Entity entity, T component) {
 }
 
 void apply_operations(World& world) {
-    for (int i = 0; i < world.ops.size(); i++) {
+    for (int i = 0; i < world.ops.count; i++) {
         if (is_alive(world, world.ops[i].entity)) {
             despawn(world, world.ops[i].entity);
         }
     }
 
-    world.ops.clear();
+    clear(world.ops);
 }
 
 void lock(World& world) {
