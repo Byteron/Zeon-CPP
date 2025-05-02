@@ -22,19 +22,8 @@ struct MeshComponent {
 };
 
 int main() {
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
-        fprintf(stderr, "SDL_Init Error: %s\n", SDL_GetError());
-        return 1;
-    }
-
-    SDL_Window *window = SDL_CreateWindow("Test", 800, 600, SDL_WINDOW_OPENGL);
-    if (!window) {
-        fprintf(stderr, "SDL_CreateWindow Error: %s\n", SDL_GetError());
-        SDL_Quit();
-        return 1;
-    }
-
-    fprintf(stderr, "SDL_GetBasePath: %s\n", SDL_GetBasePath());
+    init_engine("../assets");
+    init_window("Zeon", 800, 600);
 
     Model model = load_gltf("/../assets/models/Barbarian.glb");
 
@@ -46,21 +35,11 @@ int main() {
     add_component(world, e1, MeshComponent{ 6 });
     add_component(world, e2, MeshComponent{ 7 });
 
-    bool quit = false;
-
-    while (!quit) {
-        SDL_Event event;
-        while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_EVENT_QUIT) {
-                quit = true;
-            }
-        }
+    while (!should_window_close()) {
         
-        SDL_Delay(16);
     }
 
-    SDL_DestroyWindow(window);
-    SDL_Quit();
+    deinit_engine();
 
     return 0;
 }

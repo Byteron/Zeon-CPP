@@ -105,6 +105,17 @@ struct Model {
     string path{};
 };
 
+void init_graphics(Engine* engine) {
+    engine->gpu = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, true, nullptr);
+    assert(engine->gpu);
+
+    bool ok = SDL_ClaimWindowForGPUDevice(engine->gpu, engine->window);
+    assert(ok);
+
+    SDL_GetWindowSize(engine->window, &engine->window_width, &engine->window_height);
+    SDL_GetWindowSize(engine->window, &engine->render_width, &engine->render_height);
+}
+
 SDL_GPUTexture* load_texture(void* data, size_t size) {
     return nullptr;
 }
@@ -359,8 +370,7 @@ Array<Animation> process_animations(const cgltf_data* data, Skeleton& skeleton) 
 }
 
 Model load_gltf(const char* path) {
-    string exe_path = get_executable_directory();
-    string full_path = exe_path + path;
+    string full_path = _engine->assets_path + path;
 
     string file_contents = read_entire_file(full_path);
 
