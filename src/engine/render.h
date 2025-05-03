@@ -105,15 +105,60 @@ struct Model {
     string path{};
 };
 
-void init_graphics(Engine* engine) {
-    engine->gpu = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, true, nullptr);
-    assert(engine->gpu);
+void init_graphics() {
+    SDL_GetWindowSize(_engine->window, &_engine->window_width, &_engine->window_height);
+    SDL_GetWindowSize(_engine->window, &_engine->render_width, &_engine->render_height);
 
-    bool ok = SDL_ClaimWindowForGPUDevice(engine->gpu, engine->window);
+    _engine->gpu = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, true, nullptr);
+    assert(_engine->gpu);
+
+    bool ok = SDL_ClaimWindowForGPUDevice(_engine->gpu, _engine->window);
     assert(ok);
 
-    SDL_GetWindowSize(engine->window, &engine->window_width, &engine->window_height);
-    SDL_GetWindowSize(engine->window, &engine->render_width, &engine->render_height);
+    SDL_GPUGraphicsPipelineCreateInfo pipeline_info = {
+        .depth_stencil_state = {
+            .compare_op = SDL_GPU_COMPAREOP_LESS,
+            .enable_depth_test = true,
+            .enable_depth_write = true,
+        },
+    };
+
+    _engine->pipeline = SDL_CreateGPUGraphicsPipeline(_engine->gpu, &pipeline_info);
+}
+
+void render() {
+    SDL_GPUCommandBuffer* command_buffer = SDL_AcquireGPUCommandBuffer(_engine->gpu);
+    assert(command_buffer);
+
+    bool ok = SDL_WaitAndAcquireGPUSwapchainTexture(command_buffer, _engine->window, &_engine->swapchain_texture, 0, 0);
+    assert(ok);
+
+    if (_engine->swapchain_texture != nullptr) {
+        SDL_GPUColorTargetInfo color_target_info = {
+            .texture = _engine->swapchain_texture,
+            .clear_color = { 0.2f, 0.22f, 0.24f, 1.0f},
+            .load_op = SDL_GPU_LOADOP_CLEAR,
+            .store_op = SDL_GPU_STOREOP_STORE
+        };
+
+        SDL_GPUDepthStencilTargetInfo depth_target_info = {
+            .texture = _engine->depth_texture,
+            .clear_depth = 1.0f,
+            .load_op = SDL_GPU_LOADOP_CLEAR,
+            .store_op = SDL_GPU_STOREOP_STORE
+        };
+
+        SDL_GPURenderPass* render_pass = SDL_BeginGPURenderPass(command_buffer, &color_target_info, 1, &depth_target_info);
+        assert(render_pass);
+
+        SDL_BindGPUGraphicsPipeline(render_pass, _engine->pipeline);
+
+        SDL_EndGPURenderPass(render_pass);
+        
+    }
+
+    ok = SDL_SubmitGPUCommandBuffer(command_buffer);
+    assert(ok);
 }
 
 SDL_GPUTexture* load_texture(void* data, size_t size) {

@@ -14,9 +14,9 @@ struct Engine {
 
     SDL_Window* window{};
     SDL_GPUDevice* gpu{};
+    SDL_GPUGraphicsPipeline* pipeline{};
     SDL_GPUTexture* swapchain_texture{};
     SDL_GPUTexture* depth_texture{};
-    SDL_GPUCommandBuffer* command_buffer{};
 
     int window_width{};
     int window_height{};
@@ -48,49 +48,23 @@ void init_window(const char* name, int width, int height) {
     _engine->window = SDL_CreateWindow(name, width, height, 0);
     assert(_engine->window);
 
-    init_graphics(_engine);
-}
-
-void reset_input() {
-
-}
-
-void process_input() {
-    SDL_Event event;
-    while (SDL_PollEvent(&event)) {
-        if (event.type == SDL_EVENT_QUIT) {
-            _engine->quit = true;
-        }
-    }
+    init_graphics();
 }
 
 bool should_window_close() {
+    render();
+
+    // swap buffers
+    // reset temporary storage
+
     reset_input();
     process_input();
 
-    // bool ok = SDL_WaitAndAcquireGPUSwapchainTexture(_engine->command_buffer, _engine->window, &_engine->swapchain_texture, 0, 0);
-    // assert(ok);
+    // update time
+    // update sound
+    // update animation / physics?
 
-    // if (_engine->swapchain_texture != nullptr) {
-    //     SDL_GPUColorTargetInfo color_target_info = {
-    //         .texture = _engine->swapchain_texture,
-    //         .clear_color = { 0.0f, 0.2f, 0.4f, 1.0f},
-    //         .load_op = SDL_GPU_LOADOP_CLEAR,
-    //         .store_op = SDL_GPU_STOREOP_STORE
-    //     };
-
-    //     // SDL_GPUDepthStencilTargetInfo depth_target_info = {
-    //     //     .texture = _engine->depth_texture,
-    //     //     .clear_depth = 1.0f,
-    //     //     .load_op = SDL_GPU_LOADOP_CLEAR,
-    //     //     .store_op = SDL_GPU_STOREOP_STORE
-    //     // };
-
-    //     SDL_GPURenderPass* render_pass = SDL_BeginGPURenderPass(_engine->command_buffer, &color_target_info, 1, nullptr);
-    //     assert(render_pass);
-
-    //     SDL_EndGPURenderPass(render_pass);
-    // }
+    // update file watcher?
 
     return _engine->quit;
 }
