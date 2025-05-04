@@ -105,6 +105,61 @@ struct Model {
     string path{};
 };
 
+SDL_GPUShader* load_shader(const string& path, SDL_GPUShaderStage stage, uint num_samplers, uint num_uniform_buffers) {
+    string full_path = _engine->root_path + path;
+    string file_contents = read_entire_file(full_path);
+
+    SDL_GPUShaderCreateInfo create_info = {
+        .code_size = file_contents.length,
+        .code = reinterpret_cast<const byte*>(file_contents.data),
+        .entrypoint = "main",
+        .format = SDL_GPU_SHADERFORMAT_SPIRV,
+        .stage = stage,
+        .num_samplers = num_samplers,
+        .num_uniform_buffers = num_uniform_buffers,
+    };
+
+    return SDL_CreateGPUShader(_engine->gpu, &create_info);
+}
+
+GraphicsPipeline create_solid_skinned_pipeline() {
+    string vertex_shader_path = to_string("shaders/solid_skinned.vert");
+    string fragment_shader_path = to_string("shaders/solid_skinned.frag");
+
+    SDL_GPUShader* vertex_shader = load_shader(vertex_shader_path, SDL_GPU_SHADERSTAGE_VERTEX, 0, 0);
+    SDL_GPUShader* fragment_shader = load_shader(fragment_shader_path, SDL_GPU_SHADERSTAGE_FRAGMENT, 0, 0);
+
+    SDL_GPUColorTargetDescription color_target_description = {
+        .format = SDL_GetGPUSwapchainTextureFormat(_engine->gpu, _engine->window),
+    };
+
+    SDL_GPUGraphicsPipelineCreateInfo pipeline_info = {
+        .vertex_shader = vertex_shader,
+        .fragment_shader = fragment_shader,
+        .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+        .rasterizer_state =  {
+            .fill_mode = SDL_GPU_FILLMODE_FILL,
+            .cull_mode = SDL_GPU_CULLMODE_BACK,
+        },
+        .depth_stencil_state = {
+            .compare_op = SDL_GPU_COMPAREOP_LESS,
+            .enable_depth_test = true,
+            .enable_depth_write = true,
+        },
+        .target_info = {
+            .color_target_descriptions = &color_target_description,
+            .num_color_targets = 1,
+            .depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT,
+            .has_depth_stencil_target = true,
+        },
+    };
+
+    SDL_GPUGraphicsPipeline* pipeline = SDL_CreateGPUGraphicsPipeline(_engine->gpu, &pipeline_info);
+
+    return { vertex_shader, fragment_shader, pipeline };
+}
+
+
 void init_graphics() {
     SDL_GetWindowSize(_engine->window, &_engine->window_width, &_engine->window_height);
     SDL_GetWindowSize(_engine->window, &_engine->render_width, &_engine->render_height);
@@ -115,15 +170,18 @@ void init_graphics() {
     bool ok = SDL_ClaimWindowForGPUDevice(_engine->gpu, _engine->window);
     assert(ok);
 
-    SDL_GPUGraphicsPipelineCreateInfo pipeline_info = {
-        .depth_stencil_state = {
-            .compare_op = SDL_GPU_COMPAREOP_LESS,
-            .enable_depth_test = true,
-            .enable_depth_write = true,
-        },
+    SDL_GPUTextureCreateInfo depth_texture_info = {
+        .format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT_S8_UINT,
+        .usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET,
+        .width = static_cast<uint>(_engine->render_width),
+        .height = static_cast<uint>(_engine->render_height),
+        .layer_count_or_depth = 1,
+        .num_levels = 1,
     };
 
-    _engine->pipeline = SDL_CreateGPUGraphicsPipeline(_engine->gpu, &pipeline_info);
+    _engine->depth_texture = SDL_CreateGPUTexture(_engine->gpu, &depth_texture_info);
+
+    _engine->solid_skinned_pipeline = create_solid_skinned_pipeline();
 }
 
 void render() {
@@ -141,6 +199,7 @@ void render() {
             .store_op = SDL_GPU_STOREOP_STORE
         };
 
+        // TODO: actually create the depth texture
         SDL_GPUDepthStencilTargetInfo depth_target_info = {
             .texture = _engine->depth_texture,
             .clear_depth = 1.0f,
@@ -151,7 +210,7 @@ void render() {
         SDL_GPURenderPass* render_pass = SDL_BeginGPURenderPass(command_buffer, &color_target_info, 1, &depth_target_info);
         assert(render_pass);
 
-        SDL_BindGPUGraphicsPipeline(render_pass, _engine->pipeline);
+        SDL_BindGPUGraphicsPipeline(render_pass, _engine->solid_skinned_pipeline.pipeline);
 
         SDL_EndGPURenderPass(render_pass);
         

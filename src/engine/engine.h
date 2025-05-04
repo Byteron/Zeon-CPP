@@ -1,3 +1,8 @@
+struct GraphicsPipeline {
+    SDL_GPUShader* vertex_shader{};
+    SDL_GPUShader* fragment_shader{};
+    SDL_GPUGraphicsPipeline* pipeline{};
+};
 
 struct Engine {
     string name{};
@@ -14,9 +19,10 @@ struct Engine {
 
     SDL_Window* window{};
     SDL_GPUDevice* gpu{};
-    SDL_GPUGraphicsPipeline* pipeline{};
     SDL_GPUTexture* swapchain_texture{};
     SDL_GPUTexture* depth_texture{};
+
+    GraphicsPipeline solid_skinned_pipeline{};
 
     int window_width{};
     int window_height{};
