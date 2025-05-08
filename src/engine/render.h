@@ -1,49 +1,3 @@
-struct Vertex {
-    Vec3 position{};
-    Vec3 normal{};
-    Vec4 uv{};
-    Vec3 color{};
-    Vec3 tangent{};
-    Vec3 bitangent{};
-    float weights[4]{};
-    unsigned int joints[4]{};
-};
-
-struct Material {
-    Vec4 albedo{};
-
-    SDL_GPUTexture* diffuse_texture{};
-    SDL_GPUTexture* normal_texture{};
-    SDL_GPUTexture* specular_texture{};
-    int alpha_mode{};
-
-    SDL_GPUShader* shader{};
-};
-
-enum MeshType {
-    Static,
-    Skinned,
-};
-
-struct Mesh {
-    struct Primitive {
-        Array<Vertex> vertices{};
-        Array<size_t> indices{};
-
-        SDL_GPUBuffer* vertexBuffer{};
-        SDL_GPUBuffer* indexBuffer{};
-
-        AABB aabb{};
-
-        Material material{};
-    };
-
-    MeshType type{};
-
-    AABB aabb{};
-    Array<Primitive> primitives{};
-};
-
 struct Skeleton {
     struct Joint {
         string name{};
@@ -105,6 +59,23 @@ struct Model {
     string path{};
 };
 
+struct CameraUBO {
+    Mat4 view_projection;
+    Mat4 view;
+    float near;
+    float far;
+    Mat4 model;
+    Mat4 joint_matrices[100];
+};
+
+struct LightUBO {
+    Vec3 light_direction;
+    Vec3 light_color;
+    Vec3 camera_position;
+
+    Vec4 albedo;
+};
+
 SDL_GPUShader* load_shader(const string& path, SDL_GPUShaderStage stage, uint num_samplers, uint num_uniform_buffers) {
     string full_path = _engine->root_path + path;
     string file_contents = read_entire_file(full_path);
@@ -126,16 +97,40 @@ GraphicsPipeline create_solid_skinned_pipeline() {
     string vertex_shader_path = to_string("shaders/solid_skinned.vert");
     string fragment_shader_path = to_string("shaders/solid_skinned.frag");
 
-    SDL_GPUShader* vertex_shader = load_shader(vertex_shader_path, SDL_GPU_SHADERSTAGE_VERTEX, 0, 0);
-    SDL_GPUShader* fragment_shader = load_shader(fragment_shader_path, SDL_GPU_SHADERSTAGE_FRAGMENT, 0, 0);
+    SDL_GPUShader* vertex_shader = load_shader(vertex_shader_path, SDL_GPU_SHADERSTAGE_VERTEX, 0, 1);
+    SDL_GPUShader* fragment_shader = load_shader(fragment_shader_path, SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 0);
 
     SDL_GPUColorTargetDescription color_target_description = {
         .format = SDL_GetGPUSwapchainTextureFormat(_engine->gpu, _engine->window),
     };
 
+    SDL_GPUVertexBufferDescription vertex_buffer_description = {
+        .slot = 0,
+        .pitch = sizeof(Vertex),
+    };
+
+    SDL_GPUVertexAttribute vertex_attributes[] = {
+        { .location = 0, .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, .offset = 0 * sizeof(float) },
+        { .location = 1, .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, .offset = 3 * sizeof(float) },
+        { .location = 2, .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4, .offset = 6 * sizeof(float) },
+        { .location = 3, .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4, .offset = 10 * sizeof(float) },
+        { .location = 4, .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, .offset = 14 * sizeof(float) },
+        { .location = 5, .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, .offset = 17 * sizeof(float) },
+        { .location = 6, .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, .offset = 20 * sizeof(float) },
+        { .location = 7, .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4, .offset = 23 * sizeof(float) },
+        { .location = 8, .format = SDL_GPU_VERTEXELEMENTFORMAT_UINT4, .offset = 27 * sizeof(float) },
+    };
+
     SDL_GPUGraphicsPipelineCreateInfo pipeline_info = {
         .vertex_shader = vertex_shader,
         .fragment_shader = fragment_shader,
+        .vertex_input_state = {
+            .vertex_buffer_descriptions = &vertex_buffer_description,
+            .num_vertex_buffers = 1,
+            .vertex_attributes = &vertex_attributes[0],
+            .num_vertex_attributes = sizeof(vertex_attributes) / sizeof(vertex_attributes[0]),
+            
+        },
         .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
         .rasterizer_state =  {
             .fill_mode = SDL_GPU_FILLMODE_FILL,
@@ -154,9 +149,13 @@ GraphicsPipeline create_solid_skinned_pipeline() {
         },
     };
 
+    SDL_GPUSamplerCreateInfo sampler_create_info{};
+
+    SDL_GPUSampler *sampler = SDL_CreateGPUSampler(_engine->gpu, &sampler_create_info);
+
     SDL_GPUGraphicsPipeline* pipeline = SDL_CreateGPUGraphicsPipeline(_engine->gpu, &pipeline_info);
 
-    return { vertex_shader, fragment_shader, pipeline };
+    return { vertex_shader, fragment_shader, sampler, pipeline };
 }
 
 
@@ -184,12 +183,125 @@ void init_graphics() {
     _engine->solid_skinned_pipeline = create_solid_skinned_pipeline();
 }
 
+
+void upload_meshes_to_gpu() {
+    if (_engine->gpu_upload_operations.count == 0)
+        return;
+    
+    uint total_buffer_size{};
+
+    for (int i = 0; i < _engine->gpu_upload_operations.count; ++i) {
+        Mesh& mesh = _engine->gpu_upload_operations[i];
+        for (int j = 0; j < mesh.primitives.count; ++j) {
+            Mesh::Primitive& primitive = mesh.primitives[j];
+
+            SDL_GPUBufferCreateInfo vertex_buffer_info {
+                .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+                .size = sizeof(Vertex) * primitive.vertices.count,
+            };
+
+            SDL_GPUBufferCreateInfo index_buffer_info {
+                .usage = SDL_GPU_BUFFERUSAGE_INDEX,
+                .size = sizeof(uint) * primitive.indices.count,
+            };
+
+            primitive.vertex_buffer = SDL_CreateGPUBuffer(_engine->gpu, &vertex_buffer_info);
+            primitive.index_buffer = SDL_CreateGPUBuffer(_engine->gpu, &index_buffer_info);
+
+            total_buffer_size += vertex_buffer_info.size + index_buffer_info.size;
+        }
+    }
+
+    printf("Meshes Uploaded: %d (%d KB)\n", _engine->gpu_upload_operations.count, total_buffer_size / 1024);
+
+    SDL_GPUTransferBufferCreateInfo transfer_buffer_create_info {
+        .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+        .size = total_buffer_size,
+    };
+
+    SDL_GPUTransferBuffer* transfer_buffer = SDL_CreateGPUTransferBuffer(_engine->gpu, &transfer_buffer_create_info);
+    byte* transfer_memory = reinterpret_cast<byte*>(SDL_MapGPUTransferBuffer(_engine->gpu, transfer_buffer, false));
+
+    uint offset = 0;
+
+    for (int i = 0; i < _engine->gpu_upload_operations.count; ++i) {
+        Mesh& mesh = _engine->gpu_upload_operations[i];
+        for (int j = 0; j < mesh.primitives.count; ++j) {
+            Mesh::Primitive& primitive = mesh.primitives[j];
+
+            uint vertex_buffer_size = sizeof(Vertex) * primitive.vertices.count;
+            uint index_buffer_size = sizeof(uint) * primitive.indices.count;
+
+            memcpy(transfer_memory + offset, primitive.vertices.data, vertex_buffer_size);
+            offset += vertex_buffer_size;
+            memcpy(transfer_memory + offset, primitive.indices.data, index_buffer_size);
+            offset += index_buffer_size;
+        }
+    }
+
+    SDL_UnmapGPUTransferBuffer(_engine->gpu, transfer_buffer);
+
+    SDL_GPUCommandBuffer* command_buffer = SDL_AcquireGPUCommandBuffer(_engine->gpu);
+    SDL_GPUCopyPass* copy_pass = SDL_BeginGPUCopyPass(command_buffer);
+
+    offset = 0;
+
+    for (int i = 0; i < _engine->gpu_upload_operations.count; ++i) {
+        Mesh& mesh = _engine->gpu_upload_operations[i];
+        for (int j = 0; j < mesh.primitives.count; ++j) {
+            Mesh::Primitive& primitive = mesh.primitives[j];
+
+            uint vertex_buffer_size = sizeof(Vertex) * primitive.vertices.count;
+            uint index_buffer_size = sizeof(uint) * primitive.indices.count;
+
+            SDL_GPUTransferBufferLocation vertex_transfer_buffer_location{
+                .transfer_buffer = transfer_buffer,
+                .offset = offset,
+            };
+
+            SDL_GPUBufferRegion vertex_buffer_region {
+                .buffer = primitive.vertex_buffer,
+                .size = vertex_buffer_size,
+            };
+
+            offset += vertex_buffer_size;
+
+            SDL_GPUTransferBufferLocation index_transfer_buffer_location{
+                .transfer_buffer = transfer_buffer,
+                .offset = offset,
+            };
+
+            SDL_GPUBufferRegion index_buffer_region {
+                .buffer = primitive.index_buffer,
+                .size = index_buffer_size,
+            };
+
+            offset += index_buffer_size;
+
+            SDL_UploadToGPUBuffer(copy_pass, &vertex_transfer_buffer_location, &vertex_buffer_region, false);
+            SDL_UploadToGPUBuffer(copy_pass, &index_transfer_buffer_location, &index_buffer_region, false);
+        }
+    }
+
+    SDL_EndGPUCopyPass(copy_pass);
+
+    bool ok = SDL_SubmitGPUCommandBuffer(command_buffer);
+    assert(ok);
+
+    SDL_ReleaseGPUTransferBuffer(_engine->gpu, transfer_buffer);
+
+    clear(_engine->gpu_upload_operations);
+}
+
 void render() {
     SDL_GPUCommandBuffer* command_buffer = SDL_AcquireGPUCommandBuffer(_engine->gpu);
     assert(command_buffer);
 
     bool ok = SDL_WaitAndAcquireGPUSwapchainTexture(command_buffer, _engine->window, &_engine->swapchain_texture, 0, 0);
     assert(ok);
+
+    CameraUBO vertex_ubo{};
+    LightUBO fragment_ubo{};
 
     if (_engine->swapchain_texture != nullptr) {
         SDL_GPUColorTargetInfo color_target_info = {
@@ -212,6 +324,11 @@ void render() {
 
         SDL_BindGPUGraphicsPipeline(render_pass, _engine->solid_skinned_pipeline.pipeline);
 
+        // TODO: Bind Samplers here with textures
+
+        SDL_PushGPUVertexUniformData(command_buffer, 0, &vertex_ubo, sizeof(CameraUBO));
+        SDL_PushGPUFragmentUniformData(command_buffer, 0, &fragment_ubo, sizeof(LightUBO));
+
         SDL_EndGPURenderPass(render_pass);
         
     }
@@ -226,10 +343,6 @@ SDL_GPUTexture* load_texture(void* data, size_t size) {
 
 SDL_GPUTexture* load_texture(const string& path) {
     return nullptr;
-}
-
-void setup_mesh(Mesh* mesh) {
-    // TODO: initialize mesh SDL GPU Style. If possible. We will see.
 }
 
 Mesh process_mesh(string path, const cgltf_mesh* raw_mesh, cgltf_node* node) {
@@ -318,8 +431,6 @@ Mesh process_mesh(string path, const cgltf_mesh* raw_mesh, cgltf_node* node) {
         }
     }
 
-    setup_mesh(&mesh);
-
     for (int i = 0; i < mesh.primitives.count; ++i) {
         auto& primitive = mesh.primitives[i];
         for (int j = 0; j < primitive.vertices.count; ++j) {
@@ -331,6 +442,8 @@ Mesh process_mesh(string path, const cgltf_mesh* raw_mesh, cgltf_node* node) {
         mesh.aabb.min = min(mesh.aabb.min, primitive.aabb.min);
         mesh.aabb.max = max(mesh.aabb.max, primitive.aabb.max);
     }
+
+    add(_engine->gpu_upload_operations, mesh);
 
     return mesh;
 }
@@ -363,6 +476,10 @@ Array<Mesh> process_meshes(string path, cgltf_data* data) {
 
 Skeleton process_skeleton(const cgltf_data* data) {
     Skeleton skeleton{};
+
+    if (data->skins == nullptr)
+        return skeleton;
+
     const cgltf_skin skin = data->skins[0];
 
     Span all_joints = { skin.joints, skin.joints_count };
@@ -408,7 +525,7 @@ Array<Animation> process_animations(const cgltf_data* data, Skeleton& skeleton) 
     for (int i = 0; i < data->animations_count; ++i) {
         cgltf_animation animation_data = data->animations[i];
         string name = to_string(animation_data.name);
-        fprintf(stderr,"name: %s\n", name.data);
+        // fprintf(stderr,"name: %s\n", name.data);
 
         Animation& animation = animations[i];
         animation.name = name;
@@ -475,6 +592,8 @@ Array<Animation> process_animations(const cgltf_data* data, Skeleton& skeleton) 
 
 Model load_gltf(const char* path) {
     string full_path = _engine->assets_path + path;
+
+    fprintf(stderr, "paths: %s, %s, %s\n", path, _engine->assets_path.data, full_path.data);
 
     string file_contents = read_entire_file(full_path);
 

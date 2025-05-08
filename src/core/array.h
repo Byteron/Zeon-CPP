@@ -1,8 +1,8 @@
 template <typename T>
 struct Array {
     T* data;
-    size_t count;
-    size_t capacity;
+    uint count;
+    uint capacity;
 
     T& operator[](size_t index) {
         assert(index >= 0 && index < count);

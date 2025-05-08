@@ -1,5 +1,6 @@
 typedef unsigned char byte;
 typedef unsigned int uint;
+
 #include "math.h"
 #include "string.h"
 #include "array.h"

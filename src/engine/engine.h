@@ -1,7 +1,56 @@
 struct GraphicsPipeline {
     SDL_GPUShader* vertex_shader{};
     SDL_GPUShader* fragment_shader{};
+
+    SDL_GPUSampler* sampler{};
+
     SDL_GPUGraphicsPipeline* pipeline{};
+};
+
+struct Vertex {
+    Vec3 position{};
+    Vec3 normal{};
+    Vec4 uv{};
+    Vec3 color{};
+    Vec3 tangent{};
+    Vec3 bitangent{};
+    float weights[4]{};
+    unsigned int joints[4]{};
+};
+
+struct Material {
+    Vec4 albedo{};
+
+    SDL_GPUTexture* diffuse_texture{};
+    SDL_GPUTexture* normal_texture{};
+    SDL_GPUTexture* specular_texture{};
+    int alpha_mode{};
+
+    SDL_GPUShader* shader{};
+};
+
+enum MeshType {
+    Static,
+    Skinned,
+};
+
+struct Mesh {
+    struct Primitive {
+        Array<Vertex> vertices{};
+        Array<uint> indices{};
+
+        SDL_GPUBuffer* vertex_buffer{};
+        SDL_GPUBuffer* index_buffer{};
+
+        AABB aabb{};
+
+        Material material{};
+    };
+
+    MeshType type{};
+
+    AABB aabb{};
+    Array<Primitive> primitives{};
 };
 
 struct Engine {
@@ -23,6 +72,8 @@ struct Engine {
     SDL_GPUTexture* depth_texture{};
 
     GraphicsPipeline solid_skinned_pipeline{};
+
+    Array<Mesh> gpu_upload_operations{};
 
     int window_width{};
     int window_height{};
@@ -58,6 +109,7 @@ void init_window(const char* name, int width, int height) {
 }
 
 bool should_window_close() {
+    upload_meshes_to_gpu();
     render();
 
     // swap buffers
