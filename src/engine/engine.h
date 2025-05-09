@@ -18,12 +18,24 @@ struct Vertex {
     unsigned int joints[4]{};
 };
 
+struct Image {
+    int width{}, height{};
+    int channel_count{};
+    byte* data{};
+};
+
+struct Texture {
+    Image image;
+    SDL_GPUTexture* gpu_texture{};
+};
+
 struct Material {
     Vec4 albedo{};
 
-    SDL_GPUTexture* diffuse_texture{};
-    SDL_GPUTexture* normal_texture{};
-    SDL_GPUTexture* specular_texture{};
+    Texture* diffuse_texture{};
+    Texture* normal_texture{};
+    Texture* specular_texture{};
+
     int alpha_mode{};
 
     SDL_GPUShader* shader{};
@@ -68,12 +80,14 @@ struct Engine {
 
     SDL_Window* window{};
     SDL_GPUDevice* gpu{};
+
     SDL_GPUTexture* swapchain_texture{};
     SDL_GPUTexture* depth_texture{};
 
     GraphicsPipeline solid_skinned_pipeline{};
 
-    Array<Mesh> gpu_upload_operations{};
+    Array<Mesh> meshes_to_upload{};
+    Array<Texture*> textures_to_upload{};
 
     int window_width{};
     int window_height{};
@@ -110,6 +124,8 @@ void init_window(const char* name, int width, int height) {
 
 bool should_window_close() {
     upload_meshes_to_gpu();
+    upload_textures_to_gpu();
+    
     render();
 
     // swap buffers

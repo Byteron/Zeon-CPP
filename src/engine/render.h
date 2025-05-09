@@ -158,7 +158,6 @@ GraphicsPipeline create_solid_skinned_pipeline() {
     return { vertex_shader, fragment_shader, sampler, pipeline };
 }
 
-
 void init_graphics() {
     SDL_GetWindowSize(_engine->window, &_engine->window_width, &_engine->window_height);
     SDL_GetWindowSize(_engine->window, &_engine->render_width, &_engine->render_height);
@@ -183,15 +182,98 @@ void init_graphics() {
     _engine->solid_skinned_pipeline = create_solid_skinned_pipeline();
 }
 
-
-void upload_meshes_to_gpu() {
-    if (_engine->gpu_upload_operations.count == 0)
+void upload_textures_to_gpu() {
+    if (_engine->textures_to_upload.count == 0)
         return;
     
     uint total_buffer_size{};
 
-    for (int i = 0; i < _engine->gpu_upload_operations.count; ++i) {
-        Mesh& mesh = _engine->gpu_upload_operations[i];
+    for (int i = 0; i < _engine->textures_to_upload.count; ++i) {
+        Texture* texture = _engine->textures_to_upload[i];
+
+        SDL_GPUTextureCreateInfo texture_create_info {
+            .format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+            .usage = SDL_GPU_TEXTUREUSAGE_SAMPLER,
+            .width = static_cast<uint>(texture->image.width),
+            .height = static_cast<uint>(texture->image.height),
+            .layer_count_or_depth = 1,
+            .num_levels = 1,
+        };
+
+        texture->gpu_texture = SDL_CreateGPUTexture(_engine->gpu, &texture_create_info);
+
+        total_buffer_size += texture->image.width * texture->image.height * 4;
+    }
+
+    printf("Textures Uploaded: %d (%d KB)\n", _engine->textures_to_upload.count, total_buffer_size / 1024);
+
+    SDL_GPUTransferBufferCreateInfo transfer_buffer_create_info {
+        .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+        .size = total_buffer_size,
+    };
+
+    SDL_GPUTransferBuffer* transfer_buffer = SDL_CreateGPUTransferBuffer(_engine->gpu, &transfer_buffer_create_info);
+    byte* transfer_memory = reinterpret_cast<byte*>(SDL_MapGPUTransferBuffer(_engine->gpu, transfer_buffer, false));
+
+    uint offset = 0;
+
+    for (int i = 0; i < _engine->textures_to_upload.count; ++i) {
+        Texture* texture = _engine->textures_to_upload[i];
+
+        uint texture_size = texture->image.width * texture->image.height * 4;
+
+        memcpy(transfer_memory + offset, texture->image.data, texture->image.width * texture->image.height * 4);
+
+        offset += texture_size;
+    }
+
+    SDL_UnmapGPUTransferBuffer(_engine->gpu, transfer_buffer);
+
+    SDL_GPUCommandBuffer* command_buffer = SDL_AcquireGPUCommandBuffer(_engine->gpu);
+    SDL_GPUCopyPass* copy_pass = SDL_BeginGPUCopyPass(command_buffer);
+
+    offset = 0;
+
+    for (int i = 0; i < _engine->textures_to_upload.count; ++i) {
+        Texture* texture = _engine->textures_to_upload[i];
+
+        uint texture_size = texture->image.width * texture->image.height * 4;
+
+        SDL_GPUTextureTransferInfo texture_transfer_info {
+            .transfer_buffer = transfer_buffer,
+            .offset = offset,
+        };
+
+        SDL_GPUTextureRegion texture_region {
+            .texture = texture->gpu_texture,
+            .w = static_cast<uint>(texture->image.width),
+            .h = static_cast<uint>(texture->image.height),
+            .d = 1,
+        };
+
+        SDL_UploadToGPUTexture(copy_pass, &texture_transfer_info, &texture_region, false);
+
+        offset += texture_size;
+    }
+
+    SDL_EndGPUCopyPass(copy_pass);
+
+    bool ok = SDL_SubmitGPUCommandBuffer(command_buffer);
+    assert(ok);
+
+    SDL_ReleaseGPUTransferBuffer(_engine->gpu, transfer_buffer);
+
+    clear(_engine->textures_to_upload);
+}
+
+void upload_meshes_to_gpu() {
+    if (_engine->meshes_to_upload.count == 0)
+        return;
+    
+    uint total_buffer_size{};
+
+    for (int i = 0; i < _engine->meshes_to_upload.count; ++i) {
+        Mesh& mesh = _engine->meshes_to_upload[i];
         for (int j = 0; j < mesh.primitives.count; ++j) {
             Mesh::Primitive& primitive = mesh.primitives[j];
 
@@ -212,7 +294,7 @@ void upload_meshes_to_gpu() {
         }
     }
 
-    printf("Meshes Uploaded: %d (%d KB)\n", _engine->gpu_upload_operations.count, total_buffer_size / 1024);
+    printf("Meshes Uploaded: %d (%d KB)\n", _engine->meshes_to_upload.count, total_buffer_size / 1024);
 
     SDL_GPUTransferBufferCreateInfo transfer_buffer_create_info {
         .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
@@ -224,8 +306,8 @@ void upload_meshes_to_gpu() {
 
     uint offset = 0;
 
-    for (int i = 0; i < _engine->gpu_upload_operations.count; ++i) {
-        Mesh& mesh = _engine->gpu_upload_operations[i];
+    for (int i = 0; i < _engine->meshes_to_upload.count; ++i) {
+        Mesh& mesh = _engine->meshes_to_upload[i];
         for (int j = 0; j < mesh.primitives.count; ++j) {
             Mesh::Primitive& primitive = mesh.primitives[j];
 
@@ -246,8 +328,8 @@ void upload_meshes_to_gpu() {
 
     offset = 0;
 
-    for (int i = 0; i < _engine->gpu_upload_operations.count; ++i) {
-        Mesh& mesh = _engine->gpu_upload_operations[i];
+    for (int i = 0; i < _engine->meshes_to_upload.count; ++i) {
+        Mesh& mesh = _engine->meshes_to_upload[i];
         for (int j = 0; j < mesh.primitives.count; ++j) {
             Mesh::Primitive& primitive = mesh.primitives[j];
 
@@ -290,7 +372,7 @@ void upload_meshes_to_gpu() {
 
     SDL_ReleaseGPUTransferBuffer(_engine->gpu, transfer_buffer);
 
-    clear(_engine->gpu_upload_operations);
+    clear(_engine->meshes_to_upload);
 }
 
 void render() {
@@ -337,12 +419,23 @@ void render() {
     assert(ok);
 }
 
-SDL_GPUTexture* load_texture(void* data, size_t size) {
-    return nullptr;
+// TODO: Texture as Resources with Index / Handle for stable pointers
+Texture* load_texture(byte* data, size_t size) {
+    Image image{};
+    image.data = stbi_load_from_memory(data, size, &image.width, &image.height, &image.channel_count, 0);
+    Texture* texture = new Texture { .image = image };
+    printf("Texture Loaded: W: %d, H: %d, Data: %p\n", image.width, image.height, image.data);
+    add(_engine->textures_to_upload, texture);
+    return texture;
 }
 
-SDL_GPUTexture* load_texture(const string& path) {
-    return nullptr;
+Texture* load_texture(const string& path) {
+    string full_path = _engine->assets_path + path;
+    Image image{};
+    image.data = stbi_load(full_path.data, &image.width, &image.height, &image.channel_count, 0);
+    Texture* texture = new Texture { .image = image };
+    add(_engine->textures_to_upload, texture);
+    return texture;
 }
 
 Mesh process_mesh(string path, const cgltf_mesh* raw_mesh, cgltf_node* node) {
@@ -425,7 +518,7 @@ Mesh process_mesh(string path, const cgltf_mesh* raw_mesh, cgltf_node* node) {
                     }
                 } else {
                     // TODO: replace with white texture
-                    primitive.material.diffuse_texture = nullptr;
+                    primitive.material.diffuse_texture = {};
                 }
             }
         }
@@ -443,7 +536,7 @@ Mesh process_mesh(string path, const cgltf_mesh* raw_mesh, cgltf_node* node) {
         mesh.aabb.max = max(mesh.aabb.max, primitive.aabb.max);
     }
 
-    add(_engine->gpu_upload_operations, mesh);
+    add(_engine->meshes_to_upload, mesh);
 
     return mesh;
 }

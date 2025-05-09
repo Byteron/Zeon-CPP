@@ -25,11 +25,7 @@ int main() {
     init_engine("../assets/");
     init_window("Zeon", 800, 600);
 
-    Model model1 = load_gltf("models/Barbarian.glb");
-    Model model2 = load_gltf("models/Rogue_Hooded.glb");
-    Model model3 = load_gltf("models/mantis.glb");
-    Model model4 = load_gltf("models/human_bowman.glb");
-    Model model5 = load_gltf("models/unit.glb");
+    Model model = load_gltf("models/Barbarian.glb");
 
     World world{};
 
