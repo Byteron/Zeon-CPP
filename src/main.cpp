@@ -25,7 +25,13 @@ int main() {
     init_engine("../assets/");
     init_window("Zeon", 800, 600);
 
+    Enemy* e = temp<Enemy>();
+    Span<int> t = temp_array<int>(100);
+    
+    reset_temp();
+
     Model model = load_gltf("models/Barbarian.glb");
+    model.transform.position = { 0, 0, -5 };
 
     World world{};
 
@@ -35,8 +41,14 @@ int main() {
     add_component(world, e1, MeshComponent{ 6 });
     add_component(world, e2, MeshComponent{ 7 });
 
+    Array<Mat4> skinning_matrices{};
+
     while (!should_window_close()) {
+        // Create a rotation quaternion around Y axis
+        Quat y_rotation = quat_from_axis_angle({0.0f, 1.0f, 0.0f}, 0.01f);
+        model.transform.rotation = normalize(y_rotation * model.transform.rotation);
         
+        draw_model(&model, skinning_matrices);
     }
 
     deinit_engine();

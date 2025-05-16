@@ -23,4 +23,10 @@ size_t find(Span<T> span, T value) {
     return SIZE_MAX;
 }
 
-
+template<typename T>
+Span<T> new_span(int count) {
+    Span<T> span{};
+    span.data = reinterpret_cast<T*>(malloc(sizeof(T) * count));
+    span.count = count;
+    return span;
+}

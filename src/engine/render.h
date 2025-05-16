@@ -50,6 +50,28 @@ struct Animation {
     Array<JointAnimation> joint_animations{};
 };
 
+const uint MAX_POSES = 6;
+
+struct AnimationState {
+    string name;
+    string animations[6];
+    int count;
+
+    float blend_time;
+    
+    bool loop;
+};
+
+struct AnimationPlayer {
+    SkeletonPose pose{};
+    Array<Mat4> skinning_matrices{};
+
+    string curring_animation;
+
+    float current_time;
+    // TODO: continue here with animation code
+};
+
 struct Model {
     Transform transform{};
     Array<Mesh> meshes{};
@@ -57,6 +79,11 @@ struct Model {
     Skeleton skeleton{};
     Array<Animation> animations{};
     string path{};
+};
+
+struct UBO {
+    Mat4 projection;
+    Mat4 model;
 };
 
 struct CameraUBO {
@@ -169,7 +196,7 @@ void init_graphics() {
     assert(ok);
 
     SDL_GPUTextureCreateInfo depth_texture_info = {
-        .format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT_S8_UINT,
+        .format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT,
         .usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET,
         .width = static_cast<uint>(_engine->render_width),
         .height = static_cast<uint>(_engine->render_height),
@@ -375,6 +402,37 @@ void upload_meshes_to_gpu() {
     clear(_engine->meshes_to_upload);
 }
 
+void draw_model(Model* model, Array<Mat4> skinning_matrices) {
+    Mat4 matrix = to_mat4(model->transform);
+
+    for (int i = 0; i < model->meshes.count; ++i) {
+        Mesh& mesh = model->meshes[i];
+        
+        for (int j = 0; j < mesh.primitives.count; ++j) {
+            Mesh::Primitive* primitive = &mesh.primitives[j];
+
+            if (primitive->material.alpha_mode == 0) {
+                if (mesh.type == MeshType::Static) {
+                    add(_engine->opaque_static_pass, OpaqueStaticRenderData{
+                        .transform = matrix,
+                        .primitive = primitive,
+                        .aabb = {},
+                    });
+                } else {
+                    add(_engine->opaque_skinned_pass, OpaqueSkinnedRenderData{
+                        .transform = matrix,
+                        .primitive = primitive,
+                        .aabb = {},
+                        .skinning_matrices = skinning_matrices,
+                    });
+                }
+            } else {
+
+            }
+        }
+    }
+}
+
 void render() {
     SDL_GPUCommandBuffer* command_buffer = SDL_AcquireGPUCommandBuffer(_engine->gpu);
     assert(command_buffer);
@@ -382,8 +440,8 @@ void render() {
     bool ok = SDL_WaitAndAcquireGPUSwapchainTexture(command_buffer, _engine->window, &_engine->swapchain_texture, 0, 0);
     assert(ok);
 
-    CameraUBO vertex_ubo{};
-    LightUBO fragment_ubo{};
+    float aspect_ratio = static_cast<float>(_engine->window_width) / static_cast<float>(_engine->window_height);
+    Mat4 camera_projection = perspective_projection(to_radians(60.0), aspect_ratio, 0.1, 100);
 
     if (_engine->swapchain_texture != nullptr) {
         SDL_GPUColorTargetInfo color_target_info = {
@@ -393,7 +451,6 @@ void render() {
             .store_op = SDL_GPU_STOREOP_STORE
         };
 
-        // TODO: actually create the depth texture
         SDL_GPUDepthStencilTargetInfo depth_target_info = {
             .texture = _engine->depth_texture,
             .clear_depth = 1.0f,
@@ -406,10 +463,38 @@ void render() {
 
         SDL_BindGPUGraphicsPipeline(render_pass, _engine->solid_skinned_pipeline.pipeline);
 
-        // TODO: Bind Samplers here with textures
+        // SDL_PushGPUVertexUniformData(command_buffer, 0, &vertex_ubo, sizeof(CameraUBO));
+        // SDL_PushGPUFragmentUniformData(command_buffer, 0, &fragment_ubo, sizeof(LightUBO));
 
-        SDL_PushGPUVertexUniformData(command_buffer, 0, &vertex_ubo, sizeof(CameraUBO));
-        SDL_PushGPUFragmentUniformData(command_buffer, 0, &fragment_ubo, sizeof(LightUBO));
+        for (int i = 0; i < _engine->opaque_skinned_pass.count; ++i) {
+            OpaqueSkinnedRenderData& data = _engine->opaque_skinned_pass[i];
+
+            SDL_GPUBufferBinding vertex_buffer_binding {
+                .buffer = data.primitive->vertex_buffer,
+                .offset = 0,
+            };
+
+            SDL_GPUBufferBinding index_buffer_binding {
+                .buffer = data.primitive->index_buffer,
+                .offset = 0,
+            };
+
+            SDL_GPUTextureSamplerBinding sampler_binding {
+                .texture = data.primitive->material.diffuse_texture->gpu_texture,
+                .sampler = _engine->solid_skinned_pipeline.sampler,
+            };
+
+            UBO ubo{ camera_projection, data.transform };
+
+            SDL_BindGPUVertexBuffers(render_pass, 0, &vertex_buffer_binding, 1);
+            SDL_BindGPUIndexBuffer(render_pass, &index_buffer_binding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+
+            SDL_BindGPUFragmentSamplers(render_pass, 0, &sampler_binding, 1);
+
+            SDL_PushGPUVertexUniformData(command_buffer, 0, &ubo, sizeof(UBO));
+
+            SDL_DrawGPUIndexedPrimitives(render_pass, data.primitive->indices.count, 1, 0, 0, 0);
+        }
 
         SDL_EndGPURenderPass(render_pass);
         
@@ -417,6 +502,9 @@ void render() {
 
     ok = SDL_SubmitGPUCommandBuffer(command_buffer);
     assert(ok);
+
+    clear(_engine->opaque_static_pass);
+    clear(_engine->opaque_skinned_pass);
 }
 
 // TODO: Texture as Resources with Index / Handle for stable pointers
@@ -424,7 +512,7 @@ Texture* load_texture(byte* data, size_t size) {
     Image image{};
     image.data = stbi_load_from_memory(data, size, &image.width, &image.height, &image.channel_count, 0);
     Texture* texture = new Texture { .image = image };
-    printf("Texture Loaded: W: %d, H: %d, Data: %p\n", image.width, image.height, image.data);
+    // printf("Texture Loaded: W: %d, H: %d, Data: %p\n", image.width, image.height, image.data);
     add(_engine->textures_to_upload, texture);
     return texture;
 }

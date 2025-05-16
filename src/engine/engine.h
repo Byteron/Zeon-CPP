@@ -11,7 +11,7 @@ struct Vertex {
     Vec3 position{};
     Vec3 normal{};
     Vec4 uv{};
-    Vec3 color{};
+    Vec4 color{ 1.0f, 1.0f, 1.0f, 1.0f };
     Vec3 tangent{};
     Vec3 bitangent{};
     float weights[4]{};
@@ -65,6 +65,23 @@ struct Mesh {
     Array<Primitive> primitives{};
 };
 
+struct OpaqueStaticRenderData {
+    Mat4 transform;
+    Mesh::Primitive* primitive;
+    AABB aabb;
+
+    float distance_to_camera;
+};
+
+struct OpaqueSkinnedRenderData {
+    Mat4 transform;
+    Mesh::Primitive* primitive;
+    AABB aabb;
+    Array<Mat4> skinning_matrices;
+
+    float distance_to_camera;
+};
+
 struct Engine {
     string name{};
 
@@ -89,11 +106,16 @@ struct Engine {
     Array<Mesh> meshes_to_upload{};
     Array<Texture*> textures_to_upload{};
 
+    Array<OpaqueStaticRenderData> opaque_static_pass{};
+    Array<OpaqueSkinnedRenderData> opaque_skinned_pass{};
+
     int window_width{};
     int window_height{};
 
     int render_width{};
     int render_height{};
+
+    TemporaryAllocator temp;
 };
 
 Engine* _engine{};
@@ -146,5 +168,19 @@ bool should_window_close() {
 void deinit_engine() {
     SDL_DestroyWindow(_engine->window);
     SDL_Quit();
+}
+
+template<typename T>
+T* temp() {
+    return temp<T>(_engine->temp);
+}
+
+template<typename T>
+Span<T> temp_array(int count) {
+    return temp_array<T>(_engine->temp, count);
+}
+
+void reset_temp() {
+    reset(_engine->temp);
 }
 
