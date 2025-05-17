@@ -123,6 +123,7 @@ struct Engine {
 
 Engine* _engine{};
 
+#include "temp.h"
 #include "entity.h"
 #include "filesystem.h"
 #include "render.h"
@@ -154,7 +155,7 @@ bool should_window_close() {
     render();
 
     // swap buffers
-    // reset temporary storage
+    reset_temp();
 
     reset_input();
     process_input();
@@ -172,18 +173,3 @@ void deinit_engine() {
     SDL_DestroyWindow(_engine->window);
     SDL_Quit();
 }
-
-template<typename T>
-T* temp() {
-    return temp<T>(_engine->temp);
-}
-
-template<typename T>
-Span<T> temp_array(int count) {
-    return temp_array<T>(_engine->temp, count);
-}
-
-void reset_temp() {
-    reset(_engine->temp);
-}
-

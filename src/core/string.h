@@ -67,3 +67,12 @@ string to_string(const char* c_str) {
     result.data[result.length] = '\0';
     return result;
 }
+
+string copy(string str) {
+    string result;
+    result.length = str.length;
+    result.data = static_cast<char*>(malloc(result.length + 1));
+    memcpy(result.data, str.data, result.length);
+    result.data[result.length] = '\0';
+    return result;
+}

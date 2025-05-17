@@ -525,19 +525,18 @@ Texture* load_texture(byte* data, size_t size) {
 }
 
 Texture* load_texture(const string& path) {
-    string full_path = _engine->assets_path + path;
+    string full_path = temp_concat(_engine->assets_path, path);
 
     Texture* texture{};
 
     if (get(_engine->path_textures, full_path, texture)) {
-        free(full_path.data);
         return texture;
     }
     
     Image image{};
     image.data = stbi_load(full_path.data, &image.width, &image.height, &image.channel_count, 0);
     texture = new Texture { .image = image };
-    set(_engine->path_textures, full_path, texture);
+    set(_engine->path_textures, copy(full_path), texture);
     printf("Texture Loaded: W: %d, H: %d, Data: %p\n", image.width, image.height, image.data);
     add(_engine->textures_to_upload, texture);
     return texture;

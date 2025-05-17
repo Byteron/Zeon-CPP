@@ -26,7 +26,7 @@ int main() {
     init_window("Zeon", 800, 600);
 
     Enemy* e = temp<Enemy>();
-    Span<int> t = temp_array<int>(100);
+    Span<int> t = temp_span<int>(100);
     
     reset_temp();
 

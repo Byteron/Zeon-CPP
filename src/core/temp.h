@@ -11,13 +11,11 @@ size_t __align_up(size_t value, size_t alignment) {
     return (value + (alignment - 1)) & ~(alignment - 1);
 }
 
-template<typename T>
-T* temp(TemporaryAllocator& ta, size_t alignment = alignof(T)) {
+byte* temp_raw(TemporaryAllocator& ta, size_t size, size_t alignment = 8) {
     if (ta.pages.count == 0) {
         add(ta.pages, reinterpret_cast<byte*>(malloc(TEMP_ALLOCATOR_PAGE_SIZE)));
     }
 
-    size_t size = sizeof(T);
     size_t aligned_head = __align_up(ta.head, alignment);
     size_t new_head = aligned_head + size;
 
@@ -33,40 +31,23 @@ T* temp(TemporaryAllocator& ta, size_t alignment = alignof(T)) {
         new_head = size;
     }
 
-    byte* memory = ta.pages[ta.page] + aligned_head;
+    byte* bytes = reinterpret_cast<byte*>(ta.pages[ta.page] + aligned_head);
+
     ta.head = new_head;
 
-    return reinterpret_cast<T*>(memory);
+    return bytes;
 }
 
 template<typename T>
-Span<T> temp_array(TemporaryAllocator& ta, size_t count, size_t alignment = alignof(T)) {
-    if (ta.pages.count == 0) {
-        add(ta.pages, reinterpret_cast<byte*>(malloc(TEMP_ALLOCATOR_PAGE_SIZE)));
-    }
+T* temp(TemporaryAllocator& ta, size_t alignment = alignof(T)) {
+    return reinterpret_cast<T*>(temp_raw(ta, sizeof(T), alignment));
+}
 
-    size_t size = sizeof(T) * count;
-    size_t aligned_head = __align_up(ta.head, alignment);
-    size_t new_head = aligned_head + size;
-
-    if (new_head > TEMP_ALLOCATOR_PAGE_SIZE) {
-        ta.page += 1;
-
-        if (ta.page == ta.pages.count) {
-            add(ta.pages, reinterpret_cast<byte*>(malloc(TEMP_ALLOCATOR_PAGE_SIZE)));
-        }
-        
-        ta.head = 0;
-        aligned_head = 0;
-        new_head = size;
-    }
-
+template<typename T>
+Span<T> temp_span(TemporaryAllocator& ta, size_t count, size_t alignment = alignof(T)) {
     Span<T> span;
-    span.data = reinterpret_cast<T*>(ta.pages[ta.page] + aligned_head);
+    span.data = reinterpret_cast<T*>(temp_raw(ta, sizeof(T) * count, alignment));
     span.count = count;
-
-    ta.head = new_head;
-
     return span;
 }
 
