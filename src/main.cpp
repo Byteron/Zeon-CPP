@@ -25,11 +25,6 @@ int main() {
     init_engine("../assets/");
     init_window("Zeon", 800, 600);
 
-    Enemy* e = temp<Enemy>();
-    Span<int> t = temp_span<int>(100);
-    
-    reset_temp();
-
     Model model = load_gltf("models/Barbarian.glb");
     model.transform.position = { 0, 0, -5 };
 
