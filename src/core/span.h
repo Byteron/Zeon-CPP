@@ -26,7 +26,12 @@ size_t find(Span<T> span, T value) {
 template<typename T>
 Span<T> new_span(int count) {
     Span<T> span{};
-    span.data = reinterpret_cast<T*>(malloc(sizeof(T) * count));
+    span.data = new T[count];  // This will call default constructors
     span.count = count;
     return span;
+}
+
+template<typename T>
+void free(Span<T>& span) {
+    delete[] span.data;
 }

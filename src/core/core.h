@@ -6,3 +6,5 @@ typedef unsigned int uint;
 #include "array.h"
 #include "span.h"
 #include "temp.h"
+#include "hash.h"
+#include "hashmap.h"

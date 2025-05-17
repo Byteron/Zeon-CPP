@@ -115,6 +115,9 @@ struct Engine {
     int render_width{};
     int render_height{};
 
+    HashMap<string, Texture*> path_textures{};
+    HashMap<byte*, Texture*> data_textures{};
+
     TemporaryAllocator temp;
 };
 
