@@ -16,10 +16,8 @@ struct HashMap {
     uint count{};
 
     float max_load_factor{0.75f};
-    static const uint MAX_PROBE_LENGTH = 32;  // Used for debugging only
 };
 
-// Forward declare add
 template<typename K, typename V>
 void add(HashMap<K, V>& map, const K& key, const V& value);
 
@@ -43,7 +41,6 @@ void expand(HashMap<K, V>& map) {
     free(old_entries);
 }
 
-// Now define add
 template<typename K, typename V>
 void add(HashMap<K, V>& map, const K& key, const V& value) {
     if (map.count + 1 > map.entries.count * map.max_load_factor) {
@@ -131,7 +128,6 @@ bool remove(HashMap<K, V>& map, const K& key) {
     return true;
 }
 
-// Get value for a key
 template<typename K, typename V>
 bool get(const HashMap<K, V>& map, const K& key, V& out_value) {
     int index = find(map, key);
@@ -144,7 +140,6 @@ bool get(const HashMap<K, V>& map, const K& key, V& out_value) {
     return true;
 }
 
-// Free all memory used by the hash map
 template<typename K, typename V>
 void free(HashMap<K, V>& map) {
     free(map.entries);

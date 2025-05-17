@@ -1,6 +1,6 @@
 template<typename T>
 size_t hash(T value) {
-    static_assert("unsupported type");
+    static_assert(false, "unsupported type");
 }
 
 size_t hash(uint key) {
@@ -17,7 +17,6 @@ size_t hash(int key) {
     return key;
 }
 
-// Safer hash function for strings
 size_t hash(char* str) {
     if (!str) return 0;
     
@@ -29,12 +28,10 @@ size_t hash(char* str) {
     return hash;
 }
 
-// Hash function for custom string type
 size_t hash(string str) {
     return hash(str.data);
 }
 
-// Hash function for pointers
 template<typename T>
 size_t hash(T* ptr) {
     if (!ptr) return 0;
