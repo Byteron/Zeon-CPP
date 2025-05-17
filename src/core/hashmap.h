@@ -144,5 +144,4 @@ template<typename K, typename V>
 void free(HashMap<K, V>& map) {
     free(map.entries);
     map.count = 0;
-    map.slots_filled = 0;
 } 
