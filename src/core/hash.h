@@ -17,6 +17,17 @@ size_t hash(int key) {
     return key;
 }
 
+size_t hash(const char* str) {
+    if (!str) return 0;
+    
+    size_t hash = 5381;
+    int c;
+    while ((c = *str++)) {
+        hash = ((hash << 5) + hash) + c; // hash * 33 + c
+    }
+    return hash;
+}
+
 size_t hash(char* str) {
     if (!str) return 0;
     
