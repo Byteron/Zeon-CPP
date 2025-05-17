@@ -1,6 +1,7 @@
 @echo off
 if not exist "bin" md "bin"
 
+REM /d1reportTime /d2cgsummary
 set CompilerFlags=/std:c++20 /EHsc /Zi /nologo
 
 set IncludeFlags=/Ivendor\cgltf /Ivendor\stb /Ivendor\SDL3\include
