@@ -123,6 +123,7 @@ struct Engine {
 
 Engine* _engine{};
 
+#include "archetype.h"
 #include "temp.h"
 #include "entity.h"
 #include "filesystem.h"

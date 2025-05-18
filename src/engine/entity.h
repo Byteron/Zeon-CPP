@@ -13,13 +13,23 @@ struct Entity {
 
 constexpr Entity ENTITY_NONE{};
 
+struct TypeInfo {
+    uint id{};
+    uint size{};
+};
+
+// template<typename T>
+// TypeInfo get_type_info() {
+//     return TypeInfo{ .id = get_type_id<T>(), .size = sizeof(T) };
+// }
+
 struct Storage {
-    int id{};
+    int id{-1};
     size_t count{};
     Array<Entity> entities{};
-    Array<byte> data{};
+    Span<Array<byte>> data{};
 
-    size_t component_byte_size{};
+    Span<TypeInfo> types{};
 };
 
 void reserve(Storage& storage, size_t desired_items) {
@@ -29,17 +39,20 @@ void reserve(Storage& storage, size_t desired_items) {
     if (desired_items < 8) desired_items = 8;
 
     resize(storage.entities, desired_items);
-    resize(storage.data, desired_items * storage.component_byte_size);
+
+    for (uint i = 0; i < storage.types.count; i++) {
+        resize(storage.data[i], desired_items * storage.types[i].size);
+    }
 }
 
-void set(Storage& storage, const int index, const byte* value) {
-    const size_t i = storage.component_byte_size * index;
-    memcpy(storage.data.data + i, value, storage.component_byte_size);
+void set(Storage& storage, const int type_index, const int entity_index, const byte* value) {
+    const size_t i = storage.types[type_index].size * entity_index;
+    memcpy(storage.data[type_index].data + i, value, storage.types[type_index].size);
 }
 
-byte* get(Storage& storage, const int index) {
-    const size_t i = storage.component_byte_size * index;
-    return storage.data.data + i;
+byte* get(Storage& storage, const int type_index, const int entity_index) {
+    const size_t i = storage.types[type_index].size * entity_index;
+    return storage.data[type_index].data + i;
 }
 
 Entity remove(Storage& storage, const int index) {
@@ -52,8 +65,10 @@ Entity remove(Storage& storage, const int index) {
 
     const Entity last_entity = storage.entities[last_index];
 
-    const byte* value = get(storage, last_entity.id);
-    set(storage, index, value);
+    for (uint i = 0; i < storage.types.count; i++) {
+        const byte* value = get(storage, i, last_index);
+        set(storage, i, index, value);
+    }
 
     storage.entities[index] = last_entity;
 
@@ -62,11 +77,10 @@ Entity remove(Storage& storage, const int index) {
     return last_entity;
 }
 
-void add(Storage& storage, const Entity entity, const byte* value) {
+void add(Storage& storage, const Entity entity) {
     const size_t index = storage.count;
     storage.count++;
     reserve(storage, storage.count);
-    set(storage, index, value);
     storage.entities[index] = entity;
 }
 
@@ -87,14 +101,6 @@ struct EntityMeta {
 struct Operation {
     Entity entity;
 };
-
-inline size_t component_id_counter{0};
-
-template <typename T>
-size_t get_type_id() noexcept {
-    static const size_t id = component_id_counter++;
-    return id;
-}
 
 struct World {
     Array<EntityMeta> entities{};
@@ -118,6 +124,17 @@ int index_of(const World& world, const Entity entity) {
 
 int type_id_of(const World& world, const Entity entity) {
     return world.entities[entity.id].type_id;
+}
+
+template <typename T>
+bool has_storage(World& world) {
+    const size_t type_id = get_type_id<T>();
+
+    if (type_id >= world.storages.count) {
+        return false;
+    }
+
+    return world.storages[type_id].id == type_id;
 }
 
 template <typename T>
@@ -199,8 +216,28 @@ EntityComponentSpans<T> get(World& world) {
     return EntityComponentSpans { .components = span, .entities = storage.entities, .count = storage.count };
 }
 
-template <typename T>
-Entity spawn(World& world, T value) {
+template<typename A>
+struct archetype_components;
+
+template<typename... Components>
+struct archetype_components<Archetype<Components...>> {
+    static void init_storage(World& world) {
+        const size_t type_id = get_type_id<Archetype<Components...>>();
+        if (type_id >= world.storages.count) {
+            resize(world.storages, type_id + 1);
+        }
+        
+        Storage& storage = world.storages[type_id];
+        if (storage.id == -1) {
+            storage.id = type_id;
+            storage.types = { TypeInfo{get_type_id<Components>(), sizeof(Components)}... };
+            storage.data = { Array<byte>{}... };
+        }
+    }
+};
+
+template <typename A, typename ...T>
+Entity spawn(World& world, T... value) {
     int id;
 
     if (is_empty(world.unused_ids)) {
@@ -210,7 +247,8 @@ Entity spawn(World& world, T value) {
         id = pop_back(world.unused_ids);
     }
 
-    Storage& storage = get_storage<T>(world);
+    archetype_components<A>::init_storage(world);
+    Storage& storage = get_storage<A>(world);
 
     const int index = storage.count;
 
