@@ -216,6 +216,8 @@ Entity spawn(World& world, T value) {
 
     EntityMeta& meta = world.entities[id];
 
+    assert(meta.gen <= 0);
+
     meta = EntityMeta{
         .gen = -meta.gen + 1,
         .type_id = storage.id,

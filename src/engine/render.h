@@ -73,7 +73,6 @@ struct AnimationPlayer {
 };
 
 struct Model {
-    Transform transform{};
     Array<Mesh> meshes{};
     AABB aabb{};
     Skeleton skeleton{};
@@ -402,9 +401,7 @@ void upload_meshes_to_gpu() {
     clear(_engine->meshes_to_upload);
 }
 
-void draw_model(Model* model, Array<Mat4> skinning_matrices) {
-    Mat4 matrix = to_mat4(model->transform);
-
+void draw_model(Model* model, Mat4 matrix, Array<Mat4> skinning_matrices) {
     for (int i = 0; i < model->meshes.count; ++i) {
         Mesh& mesh = model->meshes[i];
         
