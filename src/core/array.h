@@ -39,10 +39,7 @@ template <typename T>
 void remove(Array<T>& array, size_t index) {
     assert(index >= 0 && index < array.count);
 
-    for (size_t i = index; i < array.count - 1; i++) {
-        array.data[i] = array.data[i + 1];
-    }
-
+    memmove(&array.data[index], &array.data[index + 1], (array.count - index - 1) * sizeof(T));
     array.count--;
 }
 
