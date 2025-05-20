@@ -1,22 +1,24 @@
-struct Entity {
+struct EntityId {
     int id{};
     int gen{};
 
-    bool operator==(const Entity& rhs) const noexcept {
+    int type_id{};
+
+    bool operator==(const EntityId& rhs) const noexcept {
         return id == rhs.id && gen == rhs.gen;
     }
 
-    bool operator!=(const Entity& rhs) const noexcept {
+    bool operator!=(const EntityId& rhs) const noexcept {
         return !(*this == rhs);
     }
 };
 
-constexpr Entity ENTITY_NONE{};
+constexpr EntityId ENTITY_NONE{};
 
 struct Storage {
     int id{};
     size_t count{};
-    Array<Entity> entities{};
+    Array<EntityId> entities{};
     Array<byte> data{};
 
     size_t component_byte_size{};
@@ -42,7 +44,7 @@ byte* get(Storage& storage, const int index) {
     return storage.data.data + i;
 }
 
-Entity remove(Storage& storage, const int index) {
+EntityId remove(Storage& storage, const int index) {
     const size_t last_index = storage.count - 1;
 
     if (index == last_index) {
@@ -50,7 +52,7 @@ Entity remove(Storage& storage, const int index) {
         return {};
     }
 
-    const Entity last_entity = storage.entities[last_index];
+    const EntityId last_entity = storage.entities[last_index];
 
     const byte* value = get(storage, last_entity.id);
     set(storage, index, value);
@@ -62,7 +64,7 @@ Entity remove(Storage& storage, const int index) {
     return last_entity;
 }
 
-void add(Storage& storage, const Entity entity, const byte* value) {
+void add(Storage& storage, const EntityId entity, const byte* value) {
     const size_t index = storage.count;
     storage.count++;
     reserve(storage, storage.count);
@@ -74,18 +76,23 @@ struct EntityMeta {
     int gen{};
     int type_id{};
     int index{};
+};
 
-    Entity parent{};
-    Entity first_child{};
-    Entity last_child{};
-    Entity prev_sibling{};
-    Entity next_sibling{};
+struct Entity {
+    int id{};
+    int gen{};
 
-    Transform local_transform{};
+    Transform transform{};
+
+    EntityId parent{};
+    EntityId first_child{};
+    EntityId last_child{};
+    EntityId prev_sibling{};
+    EntityId next_sibling{};
 };
 
 struct Operation {
-    Entity entity;
+    EntityId entity;
 };
 
 inline size_t component_id_counter{0};
@@ -108,15 +115,15 @@ struct World {
     bool is_locked{};
 };
 
-bool is_alive(const World& world, const Entity entity) {
+bool is_alive(const World& world, const EntityId entity) {
     return entity.id < world.entities.count && entity.gen == world.entities[entity.id].gen;
 }
 
-int index_of(const World& world, const Entity entity) {
+int index_of(const World& world, const EntityId entity) {
     return world.entities[entity.id].index;
 }
 
-int type_id_of(const World& world, const Entity entity) {
+int type_id_of(const World& world, const EntityId entity) {
     return world.entities[entity.id].type_id;
 }
 
@@ -142,65 +149,105 @@ Storage& get_storage(World& world, const size_t type_id) {
 }
 
 template <typename T>
-Span<T> get_span(World& world) {
+Span<T> get(World& world) {
     Storage& storage = get_storage<T>(world);
-    Span<T> span = { reinterpret_cast<T*>(storage.data.data()), storage.count };
+    Span<T> span = { reinterpret_cast<T*>(storage.data.data), storage.count };
     return span;
 }
 
-Entity get_parent(World& world, const Entity entity) {
-    EntityMeta& meta = world.entities[entity.id];
-    assert(is_alive(world, meta.parent));
-    return meta.parent;
-}
-
 template <typename T>
-bool is_a(World& world, const Entity entity) {
+bool is_a(World& world, const EntityId entity) {
     size_t type_id = get_type_id<T>();
     EntityMeta& meta = world.entities[entity.id];
     return meta.type_id == type_id;
 }
 
-Vec3& get_position(World& world, const Entity entity) {
+Entity& get_entity(World& world, const EntityId entity) {
     EntityMeta& meta = world.entities[entity.id];
-    return meta.local_transform.position;
+    Storage& storage = get_storage(world, meta.type_id);
+    uint offset = meta.index * storage.component_byte_size;
+    Entity* ptr = reinterpret_cast<Entity*>(storage.data.data + offset);
+    return *ptr;
 }
 
-Entity get_entity(World& world, const int entity_id) {
-    EntityMeta& meta = world.entities[entity_id];
-    return Entity{ .id = entity_id, .gen = meta.gen };
-}
-template <typename T>
-Span<Entity> get_entities(World& world) {
-    Storage& storage = get_storage<T>(world);
-    return storage.entities;
+Entity& get_parent(World& world, Entity& entity) {
+    return get_entity(world, entity.parent);
 }
 
-template <typename T>
-struct EntityPair {
-    Entity entity;
-    T& component;
-};
-template <typename T>
-struct EntityComponentSpans {
-    Span<T> components{};
-    Span<Entity> entities{};
-    size_t count{};
+Entity* get_entity(Storage& storage, const int index) {
+    uint offset = index * storage.component_byte_size;
+    return reinterpret_cast<Entity*>(storage.data.data + offset);
+}
 
-    EntityPair<T> operator[](size_t i) noexcept {
-        return { entities[i], components[i] };
+void add_child(World& world, const EntityId parent, const EntityId child) {
+    assert(is_alive(world, parent) || is_alive(world, child));
+
+    Entity& child_entity = get_entity(world, child);
+    Entity& parent_entity = get_entity(world, parent);
+
+    assert(!is_alive(world, child_entity.parent));
+
+    if (is_alive(world, parent_entity.last_child)) {
+        Entity& last_child_entity = get_entity(world, parent_entity.last_child);
+        last_child_entity.next_sibling = child;
+        child_entity.prev_sibling = parent_entity.last_child;
+    } else {
+        parent_entity.first_child = child;
     }
+
+    parent_entity.last_child = child;
+
+    child_entity.parent = parent;
+}
+
+void remove_child(World& world, const EntityId parent, const EntityId child) {
+    assert(is_alive(world, parent));
+
+    Entity& parent_entity = get_entity(world, parent);
+    Entity& child_entity = get_entity(world, child);
+
+    if (is_alive(world, child_entity.next_sibling)) {
+        Entity& next_sibling_entity = get_entity(world, child_entity.next_sibling);
+
+        if (is_alive(world, child_entity.prev_sibling)) {
+            next_sibling_entity.prev_sibling = child_entity.prev_sibling;
+        } else {
+            next_sibling_entity.next_sibling = {};
+        }
+    }
+
+    if (is_alive(world, child_entity.prev_sibling)) {
+        Entity& prev_sibling_entity = get_entity(world, child_entity.prev_sibling);
+
+        if (is_alive(world, child_entity.next_sibling)) {
+            prev_sibling_entity.next_sibling = child_entity.next_sibling;
+        } else {
+            prev_sibling_entity.next_sibling = {};
+        }
+    }
+
+    if (parent_entity.first_child == child) {
+        parent_entity.first_child = child_entity.next_sibling;
+    }
+
+    if (parent_entity.last_child == child) {
+        parent_entity.last_child = child_entity.prev_sibling;
+    }
+
+    child_entity.parent = {};
+}
+
+template <typename T, typename... Components>
+EntityId spawn(World& world, T value, Transform transform, Components... components) {
+    value.transform = transform;
+
+    EntityId entity = spawn(world, value);
+    (add_child(world, entity, spawn(world, components)), ...);
+    return entity;
 };
 
 template <typename T>
-EntityComponentSpans<T> get(World& world) {
-    Storage& storage = get_storage<T>(world);
-    Span<T> span = { reinterpret_cast<T*>(storage.data.data()), storage.count };
-    return EntityComponentSpans { .components = span, .entities = storage.entities, .count = storage.count };
-}
-
-template <typename T>
-Entity spawn(World& world, T value) {
+EntityId spawn(World& world, T value) {
     int id;
 
     if (is_empty(world.unused_ids)) {
@@ -224,123 +271,71 @@ Entity spawn(World& world, T value) {
         .index = index,
     };
 
-    Entity entity = Entity{ .id = id, .gen = meta.gen };
+    EntityId entity_id = EntityId{ .id = id, .gen = meta.gen, .type_id = storage.id };
 
-    add(storage, entity, reinterpret_cast<byte*>(&value));
+    add(storage, entity_id, reinterpret_cast<byte*>(&value));
 
-    return entity;
+    Entity* entity = get_entity(storage, index);
+
+    entity->id = id;
+    entity->gen = meta.gen;
+
+    return entity_id;
 }
 
-void add_child(World& world, const Entity parent, const Entity child) {
-    assert(is_alive(world, parent) || is_alive(world, child));
-
-    EntityMeta& child_meta = world.entities[child.id];
-    EntityMeta& parent_meta = world.entities[parent.id];
-
-    assert(!is_alive(world, child_meta.parent));
-
-    if (is_alive(world, parent_meta.last_child)) {
-        EntityMeta& last_child_meta = world.entities[parent_meta.last_child.id];
-        last_child_meta.next_sibling = child;
-        child_meta.prev_sibling = parent_meta.last_child;
-    } else {
-        parent_meta.first_child = child;
-    }
-
-    parent_meta.last_child = child;
-
-    child_meta.parent = parent;
-}
-
-void remove_child(World& world, const Entity parent, const Entity child) {
-    assert(is_alive(world, parent));
-
-    EntityMeta& parent_meta = world.entities[parent.id];
-    EntityMeta& child_meta = world.entities[child.id];
-
-    if (is_alive(world, child_meta.next_sibling)) {
-        EntityMeta& next_sibling_meta = world.entities[child_meta.next_sibling.id];
-
-        if (is_alive(world, child_meta.prev_sibling)) {
-            next_sibling_meta.prev_sibling = child_meta.prev_sibling;
-        } else {
-            next_sibling_meta.next_sibling = {};
-        }
-    }
-
-    if (is_alive(world, child_meta.prev_sibling)) {
-        EntityMeta& prev_sibling_meta = world.entities[child_meta.prev_sibling.id];
-
-        if (is_alive(world, child_meta.next_sibling)) {
-            prev_sibling_meta.next_sibling = child_meta.next_sibling;
-        } else {
-            prev_sibling_meta.next_sibling = {};
-        }
-    }
-
-    if (parent_meta.first_child == child) {
-        parent_meta.first_child = child_meta.next_sibling;
-    }
-
-    if (parent_meta.last_child == child) {
-        parent_meta.last_child = child_meta.prev_sibling;
-    }
-
-    child_meta.parent = {};
-}
-
-void delete_entity(World& world, const Entity entity) {
-    EntityMeta& meta = world.entities[entity.id];
-    meta.gen = -meta.gen;
-
+void delete_entity(World& world, const EntityId entity_id) {
+    EntityMeta& meta = world.entities[entity_id.id];
+    Entity& entity = get_entity(world, entity_id);
+    
     Storage& storage = get_storage(world, meta.type_id);
 
-    if (const Entity moved_entity = remove(storage, meta.index); moved_entity != ENTITY_NONE) {
-        EntityMeta& last_entity_meta = world.entities[moved_entity.id];
+    if (const EntityId moved_entity_id = remove(storage, meta.index); moved_entity_id != ENTITY_NONE) {
+        EntityMeta& last_entity_meta = world.entities[moved_entity_id.id];
         last_entity_meta.index = meta.index;
     }
 
-    if (is_alive(world, meta.parent)) {
-        remove_child(world, meta.parent, entity);
+    if (is_alive(world, entity.parent)) {
+        remove_child(world, entity.parent, entity_id);
     }
 
-    add(world.unused_ids, entity.id);
+    meta.gen = -meta.gen;
+    entity.gen = meta.gen;
+
+    add(world.unused_ids, entity_id.id);
 }
 
-void despawn(World& world, const Entity entity) {
-    if (!is_alive(world, entity)) {
+void despawn(World& world, const EntityId entity_id) {
+    if (!is_alive(world, entity_id)) {
         return;
     }
 
     if (world.is_locked) {
-        add(world.ops, Operation{ .entity = entity });
+        add(world.ops, Operation{ .entity = entity_id });
         return;
     }
 
-    EntityMeta& meta = world.entities[entity.id];
+    EntityMeta& meta = world.entities[entity_id.id];
+    Entity& entity = get_entity(world, entity_id);
 
-    Entity child = meta.first_child;
-    while (is_alive(world, child)) {
-        const Entity next = world.entities[child.id].next_sibling;
-        despawn(world, child);
-        child = next;
+    EntityId child_id = entity.first_child;
+    Entity& child = get_entity(world, child_id);
+
+    while (is_alive(world, child_id)) {
+        const EntityId next_id = child.next_sibling;
+        despawn(world, child_id);
+        child_id = next_id;
     }
 
-    meta.parent = {};
-    delete_entity(world, entity);
+    entity.parent = ENTITY_NONE;
+    delete_entity(world, entity_id);
 }
 
 template<typename T>
-T& get(World& world, const Entity entity) {
+T* get(World& world, const EntityId entity) {
     EntityMeta& meta = world.entities[entity.id];
-    Span<T> span = get_span<T>(world);
-    return span[meta.index];
-}
-
-template <typename T>
-void add_component(World&world, Entity entity, T component) {
-    Entity child = spawn(world, component);
-    add_child(world, entity, child);
+    Storage& storage = get_storage(world, meta.type_id);
+    uint offset = meta.index * storage.component_byte_size;
+    return reinterpret_cast<T*>(storage.data.data + offset);
 }
 
 void apply_operations(World& world) {

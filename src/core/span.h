@@ -9,7 +9,23 @@ struct Span {
 
     const T& operator[](size_t index) const {
         return data[index];
-    }  
+    }
+
+    T* begin() {
+        return data;
+    }
+
+    T* end() {
+        return data + count;
+    }
+
+    const T* begin() const {
+        return data;
+    }
+
+    const T* end() const {
+        return data + count;
+    }
 };
 
 template <typename T>

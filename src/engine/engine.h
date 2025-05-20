@@ -87,8 +87,10 @@ struct Engine {
 
     float time{};
     float delta_time{};
-    
+
     Array<float> delta_samples{};
+
+    uint frame_count{};
 
     string root_path{};
     string assets_path{};
@@ -149,6 +151,8 @@ void init_window(const char* name, int width, int height) {
 }
 
 bool should_window_close() {
+    _engine->frame_count += 1;
+
     upload_meshes_to_gpu();
     upload_textures_to_gpu();
     
@@ -161,6 +165,7 @@ bool should_window_close() {
     process_input();
 
     // update time
+    
     // update sound
     // update animation / physics?
 

@@ -10,45 +10,49 @@
 #include "engine/engine.h"
 
 
-struct Player {
-    int number{};
+struct Player : Entity {
+    float speed{};
 };
 
-struct Enemy {
-    int number{};
+struct Enemy : Entity {
+    float speed{};
 };
 
-struct MeshComponent {
+struct Renderable : Entity {
     Model* model;
 };
 
 int main() {
     init_engine("../assets/");
-    init_window("Zeon", 800, 600);
+    init_window("Zeon", 1920, 1080);
 
-    Model model = load_gltf("models/Barbarian.glb");
-    Transform transform = {
-        .position = { 0, 0, -5 },
-        .rotation = { 0, 0, 0, 1 },
-        .scale = { 1, 1, 1 }
-    };
+    Model model1 = load_gltf("models/Barbarian.glb");
+    Model model2 = load_gltf("models/Rogue_Hooded.glb");
 
     World world{};
 
-    Entity e1 = spawn(world, Player{1});
-    Entity e2 = spawn(world, Enemy{2});
-
-    add_component(world, e1, MeshComponent{ &model });
-    add_component(world, e2, MeshComponent{ &model });
+    spawn(world, Player{ .speed = 0.007f }, { .position = { 0, 0, -5 } }, Renderable{ .model = &model1 });
+    spawn(world, Enemy{ .speed = -0.01f }, { .position = { 3, -1, -7 } }, Renderable{ .model = &model2 });
+    spawn(world, Enemy{ .speed = 0.02f }, { .position = { -3, -1, -7 } }, Renderable{ .model = &model2 });
 
     Array<Mat4> skinning_matrices{};
 
     while (!should_window_close()) {
-        // Create a rotation quaternion around Y axis
-        Quat y_rotation = quat_from_axis_angle({0.0f, 1.0f, 0.0f}, 0.01f);
-        transform.rotation = normalize(y_rotation * transform.rotation);
-        
-        draw_model(&model, to_mat4(transform), skinning_matrices);
+        for (auto& player : get<Player>(world)) {
+            Quat y_rotation = quat_from_axis_angle({0.0f, 1.0f, 0.0f}, player.speed);
+            player.transform.rotation = normalize(y_rotation * player.transform.rotation);
+        }
+
+        for (auto& enemy : get<Enemy>(world)) {
+            Quat y_rotation = quat_from_axis_angle({0.0f, 1.0f, 0.0f}, enemy.speed);
+            enemy.transform.rotation = normalize(y_rotation * enemy.transform.rotation);
+        }
+
+        for (auto& renderable : get<Renderable>(world)) {
+            Entity& parent = get_parent(world, renderable);
+
+            draw_model(renderable.model, to_mat4(parent.transform), skinning_matrices);
+        }
     }
 
     deinit_engine();
