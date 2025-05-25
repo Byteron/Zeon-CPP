@@ -76,3 +76,7 @@ string copy(string str) {
     result.data[result.length] = '\0';
     return result;
 }
+
+void free(string& str) {
+    free(str.data);
+}

@@ -24,6 +24,11 @@ struct Storage {
     size_t component_byte_size{};
 };
 
+void free(Storage& storage) {
+    free(storage.entities);
+    free(storage.data);
+}
+
 void reserve(Storage& storage, size_t desired_items) {
     if (storage.entities.count >= desired_items) return;
 
@@ -79,8 +84,7 @@ struct EntityMeta {
 };
 
 struct Entity {
-    int id{};
-    int gen{};
+    EntityId id{};
 
     Transform transform{};
 
@@ -114,6 +118,17 @@ struct World {
     int lock_count{};
     bool is_locked{};
 };
+
+void free(World& world) {
+    for (int i = 0; i < world.storages.count; i++) {
+        free(world.storages[i]);
+    }
+
+    free(world.entities);
+    free(world.storages);
+    free(world.unused_ids);
+    free(world.ops);
+}
 
 bool is_alive(const World& world, const EntityId entity) {
     return entity.id < world.entities.count && entity.gen == world.entities[entity.id].gen;
@@ -174,12 +189,17 @@ Entity& get_parent(World& world, Entity& entity) {
     return get_entity(world, entity.parent);
 }
 
-Entity* get_entity(Storage& storage, const int index) {
+Entity* get_entity_ptr(Storage& storage, int index) {
     uint offset = index * storage.component_byte_size;
     return reinterpret_cast<Entity*>(storage.data.data + offset);
 }
 
-void add_child(World& world, const EntityId parent, const EntityId child) {
+Entity& get_entity(Storage& storage, int index) {
+    uint offset = index * storage.component_byte_size;
+    return *reinterpret_cast<Entity*>(storage.data.data + offset);
+}
+
+void add_child(World& world, EntityId parent, EntityId child) {
     assert(is_alive(world, parent) || is_alive(world, child));
 
     Entity& child_entity = get_entity(world, child);
@@ -238,16 +258,16 @@ void remove_child(World& world, const EntityId parent, const EntityId child) {
 }
 
 template <typename T, typename... Components>
-EntityId spawn(World& world, T value, Transform transform, Components... components) {
+T& spawn(World& world, T value, Transform transform, Components... components) {
     value.transform = transform;
 
-    EntityId entity = spawn(world, value);
-    (add_child(world, entity, spawn(world, components)), ...);
+    T& entity = spawn(world, value);
+    (add_child(world, entity.id, spawn(world, components).id), ...);
     return entity;
 };
 
 template <typename T>
-EntityId spawn(World& world, T value) {
+T& spawn(World& world, T value) {
     int id;
 
     if (is_empty(world.unused_ids)) {
@@ -275,12 +295,11 @@ EntityId spawn(World& world, T value) {
 
     add(storage, entity_id, reinterpret_cast<byte*>(&value));
 
-    Entity* entity = get_entity(storage, index);
+    T& entity = reinterpret_cast<T&>(get_entity(storage, index));
 
-    entity->id = id;
-    entity->gen = meta.gen;
+    entity.id = entity_id;
 
-    return entity_id;
+    return entity;
 }
 
 void delete_entity(World& world, const EntityId entity_id) {
@@ -299,7 +318,7 @@ void delete_entity(World& world, const EntityId entity_id) {
     }
 
     meta.gen = -meta.gen;
-    entity.gen = meta.gen;
+    entity.id.gen = meta.gen;
 
     add(world.unused_ids, entity_id.id);
 }

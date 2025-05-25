@@ -137,6 +137,41 @@ void init_engine(const char* assets_path) {
     _engine->assets_path = _engine->root_path + assets_path;
 }
 
+void free(GraphicsPipeline& pipeline) {
+    SDL_ReleaseGPUShader(_engine->gpu, pipeline.vertex_shader);
+    SDL_ReleaseGPUShader(_engine->gpu, pipeline.fragment_shader);
+    SDL_ReleaseGPUSampler(_engine->gpu, pipeline.sampler);
+    SDL_ReleaseGPUGraphicsPipeline(_engine->gpu, pipeline.pipeline);
+}
+
+void deinit_engine() {
+    free(_engine->name);
+    free(_engine->root_path);
+    free(_engine->assets_path);
+
+    free(_engine->solid_skinned_pipeline);
+
+    SDL_ReleaseGPUTexture(_engine->gpu, _engine->swapchain_texture);
+    SDL_ReleaseGPUTexture(_engine->gpu, _engine->depth_texture);
+
+    SDL_DestroyGPUDevice(_engine->gpu);
+
+    free(_engine->delta_samples);
+    free(_engine->path_textures);
+    free(_engine->data_textures);
+    free(_engine->meshes_to_upload);
+    free(_engine->textures_to_upload);
+    free(_engine->opaque_static_pass);
+    free(_engine->opaque_skinned_pass);
+    free(_engine->temp);
+
+    delete _engine;
+
+    SDL_DestroyWindow(_engine->window);
+    SDL_Quit();
+}
+
+
 void init_window(const char* name, int width, int height) {
     _engine->name = to_string(name);
 
@@ -174,7 +209,4 @@ bool should_window_close() {
     return _engine->quit;
 }
 
-void deinit_engine() {
-    SDL_DestroyWindow(_engine->window);
-    SDL_Quit();
-}
+

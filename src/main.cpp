@@ -55,7 +55,8 @@ int main() {
         }
     }
 
-    deinit_engine();
+    // free(world);
+    // deinit_engine();
 
     return 0;
 }
