@@ -1,8 +1,3 @@
-template<typename T>
-size_t hash(T value) {
-    static_assert(false, "unsupported type");
-}
-
 size_t hash(uint key) {
     key = ((key >> 16) ^ key) * 0x45d9f3b;
     key = ((key >> 16) ^ key) * 0x45d9f3b;
@@ -45,8 +40,9 @@ size_t hash(string str) {
 
 template<typename T>
 size_t hash(T* ptr) {
-    if (!ptr) return 0;
-    
+    if (!ptr)
+        return 0;
+
     size_t value = reinterpret_cast<size_t>(ptr);
     value = ((value >> 16) ^ value) * 0x45d9f3b;
     value = ((value >> 16) ^ value) * 0x45d9f3b;

@@ -2,3 +2,7 @@
 .vscode
 bin
 
+deps/SDL/
+deps/SDL_shadercross/
+deps/build/
+deps/prefix/

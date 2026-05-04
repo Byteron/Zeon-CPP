@@ -166,7 +166,9 @@ Storage& get_storage(World& world, const size_t type_id) {
 template <typename T>
 Span<T> get(World& world) {
     Storage& storage = get_storage<T>(world);
-    Span<T> span = { reinterpret_cast<T*>(storage.data.data), storage.count };
+    Span<T> span{};
+    span.data = reinterpret_cast<T*>(storage.data.data);
+    span.count = storage.count;
     return span;
 }
 

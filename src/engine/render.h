@@ -102,6 +102,14 @@ struct LightUBO {
     Vec4 albedo;
 };
 
+#if defined(__APPLE__)
+static constexpr SDL_GPUShaderFormat ZenGpuShaderFormat = SDL_GPU_SHADERFORMAT_MSL;
+static constexpr const char* ZenGpuShaderEntry = "main0";
+#else
+static constexpr SDL_GPUShaderFormat ZenGpuShaderFormat = SDL_GPU_SHADERFORMAT_SPIRV;
+static constexpr const char* ZenGpuShaderEntry = "main";
+#endif
+
 SDL_GPUShader* load_shader(const string& path, SDL_GPUShaderStage stage, uint num_samplers, uint num_uniform_buffers) {
     string full_path = _engine->root_path + path;
     string file_contents = read_entire_file(full_path);
@@ -109,8 +117,8 @@ SDL_GPUShader* load_shader(const string& path, SDL_GPUShaderStage stage, uint nu
     SDL_GPUShaderCreateInfo create_info = {
         .code_size = file_contents.length,
         .code = reinterpret_cast<const byte*>(file_contents.data),
-        .entrypoint = "main",
-        .format = SDL_GPU_SHADERFORMAT_SPIRV,
+        .entrypoint = ZenGpuShaderEntry,
+        .format = ZenGpuShaderFormat,
         .stage = stage,
         .num_samplers = num_samplers,
         .num_uniform_buffers = num_uniform_buffers,
@@ -120,8 +128,13 @@ SDL_GPUShader* load_shader(const string& path, SDL_GPUShaderStage stage, uint nu
 }
 
 GraphicsPipeline create_solid_skinned_pipeline() {
-    string vertex_shader_path = to_string("shaders/solid_skinned.vert");
-    string fragment_shader_path = to_string("shaders/solid_skinned.frag");
+#if defined(__APPLE__)
+    string vertex_shader_path = to_string("shaders/solid_skinned.vert.msl");
+    string fragment_shader_path = to_string("shaders/solid_skinned.frag.msl");
+#else
+    string vertex_shader_path = to_string("shaders/solid_skinned.vert.spv");
+    string fragment_shader_path = to_string("shaders/solid_skinned.frag.spv");
+#endif
 
     SDL_GPUShader* vertex_shader = load_shader(vertex_shader_path, SDL_GPU_SHADERSTAGE_VERTEX, 0, 1);
     SDL_GPUShader* fragment_shader = load_shader(fragment_shader_path, SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 0);
@@ -188,7 +201,7 @@ void init_graphics() {
     SDL_GetWindowSize(_engine->window, &_engine->window_width, &_engine->window_height);
     SDL_GetWindowSize(_engine->window, &_engine->render_width, &_engine->render_height);
 
-    _engine->gpu = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, true, nullptr);
+    _engine->gpu = SDL_CreateGPUDevice(ZenGpuShaderFormat, true, nullptr);
     assert(_engine->gpu);
 
     bool ok = SDL_ClaimWindowForGPUDevice(_engine->gpu, _engine->window);
@@ -305,12 +318,12 @@ void upload_meshes_to_gpu() {
 
             SDL_GPUBufferCreateInfo vertex_buffer_info {
                 .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-                .size = sizeof(Vertex) * primitive.vertices.count,
+                .size = static_cast<Uint32>(sizeof(Vertex) * primitive.vertices.count),
             };
 
             SDL_GPUBufferCreateInfo index_buffer_info {
                 .usage = SDL_GPU_BUFFERUSAGE_INDEX,
-                .size = sizeof(uint) * primitive.indices.count,
+                .size = static_cast<Uint32>(sizeof(uint) * primitive.indices.count),
             };
 
             primitive.vertex_buffer = SDL_CreateGPUBuffer(_engine->gpu, &vertex_buffer_info);
@@ -676,7 +689,7 @@ Skeleton process_skeleton(const cgltf_data* data) {
 
     const cgltf_skin skin = data->skins[0];
 
-    Span all_joints = { skin.joints, skin.joints_count };
+    Span<cgltf_node*> all_joints{ skin.joints, static_cast<size_t>(skin.joints_count) };
     resize(skeleton.joints, skin.joints_count);
 
     for (int i = 0; i < skin.joints_count; ++i) {
@@ -714,7 +727,7 @@ Array<Animation> process_animations(const cgltf_data* data, Skeleton& skeleton) 
 
     resize(animations, data->animations_count);
 
-    Span all_joints = { skin.joints, skin.joints_count };
+    Span<cgltf_node*> all_joints{ skin.joints, static_cast<size_t>(skin.joints_count) };
 
     for (int i = 0; i < data->animations_count; ++i) {
         cgltf_animation animation_data = data->animations[i];
